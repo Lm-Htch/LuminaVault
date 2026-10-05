@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: LuminaVault
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/lumina_vault}
+    username: ${POSTGRES_USER:lumina}
+    password: ${POSTGRES_PASSWORD:lumina123}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  flyway:
+    locations: classpath:db/migration,classpath:db/migration-pg
+    baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 120MB
+
+lumina:
+  storage:
+    endpoint: ${LUMINA_STORAGE_ENDPOINT:http://localhost:8333}
+    region: ${LUMINA_STORAGE_REGION:us-east-1}
+    access-key: ${LUMINA_STORAGE_ACCESS_KEY:lumina}
+    secret-key: ${LUMINA_STORAGE_SECRET_KEY:lumina123}
+    bucket: ${LUMINA_STORAGE_BUCKET:lumina-vault}
+    force-path-style: true
+    presign-expiry: 7d
+  jwt:
+    secret: ${LUMINA_JWT_SECRET:lumina-vault-dev-jwt-secret-change-me-0123456789}
+    access-ttl: 30m
+    refresh-ttl: 14d
+    issuer: LuminaVault
+  asset:
+    trash-retention-days: ${LUMINA_ASSET_TRASH_RETENTION_DAYS:30}
+    purge-cron: ${LUMINA_ASSET_PURGE_CRON:0 0 4 * * *}
+    thumbnail-max-size: ${LUMINA_ASSET_THUMBNAIL_MAX_SIZE:480}
+  ai:
+    enabled: ${LUMINA_AI_ENABLED:false}
+    provider: ${LUMINA_AI_PROVIDER:ollama}
+    base-url: ${LUMINA_AI_BASE_URL:}
+    api-key: ${LUMINA_AI_API_KEY:}
+    chat-model: ${LUMINA_AI_CHAT_MODEL:}
+    embedding-base-url: ${LUMINA_AI_EMBEDDING_BASE_URL:}
+    embedding-api-key: ${LUMINA_AI_EMBEDDING_API_KEY:}
+    embedding-model: ${LUMINA_AI_EMBEDDING_MODEL:}
+    vision: ${LUMINA_AI_VISION:true}
+    rerank: ${LUMINA_AI_RERANK:true}
+    max-image-bytes: ${LUMINA_AI_MAX_IMAGE_BYTES:10485760}
+    connect-timeout: ${LUMINA_AI_CONNECT_TIMEOUT:30s}
+    read-timeout: ${LUMINA_AI_READ_TIMEOUT:120s}
+  character:
+    auto-match: ${LUMINA_CHARACTER_AUTO_MATCH:true}
+    auto-create: ${LUMINA_CHARACTER_AUTO_CREATE:false}
+    match-threshold: ${LUMINA_CHARACTER_MATCH_THRESHOLD:0.78}
+    match-margin: ${LUMINA_CHARACTER_MATCH_MARGIN:0.02}
+    feedback-reference-weight: ${LUMINA_CHARACTER_FEEDBACK_WEIGHT:0.3}
+  model:
+    enabled: ${LUMINA_MODEL_ENABLED:false}
+    base-url: ${LUMINA_MODEL_BASE_URL:http://localhost:8000}
+    connect-timeout: ${LUMINA_MODEL_CONNECT_TIMEOUT:10s}
+    read-timeout: ${LUMINA_MODEL_READ_TIMEOUT:120s}
+    tag-confidence: ${LUMINA_MODEL_TAG_CONFIDENCE:0.5}
+  vector:
+    enabled: ${LUMINA_VECTOR_ENABLED:true}
+    image-model: ${LUMINA_VECTOR_IMAGE_MODEL:wd14-image}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false

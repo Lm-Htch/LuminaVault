@@ -1,0 +1,161 @@
+name: lumina-vault
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: lumina-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lumina_vault}
+      POSTGRES_USER: ${POSTGRES_USER:-lumina}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumina123}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  h2:
+    image: eclipse-temurin:21-jre-alpine
+    container_name: lumina-h2
+    restart: unless-stopped
+    environment:
+      H2_VERSION: ${H2_VERSION:-2.4.240}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:${H2_TCP_PORT:-9092}:9092"
+      - "127.0.0.1:${H2_WEB_PORT:-8100}:8100"
+    volumes:
+      - h2-data:/data
+      - h2-lib:/opt/h2
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        H2_JAR="/opt/h2/h2-$${H2_VERSION}.jar"
+        if [ ! -f "$${H2_JAR}" ]; then
+          apk add --no-cache curl
+          curl -fsSL -o "$${H2_JAR}" \
+            "https://repo1.maven.org/maven2/com/h2database/h2/$${H2_VERSION}/h2-$${H2_VERSION}.jar"
+        fi
+        exec java -cp "$${H2_JAR}" org.h2.tools.Server \
+          -tcp -tcpAllowOthers -tcpPort 9092 \
+          -web -webAllowOthers -webPort 8100 \
+          -baseDir /data -ifNotExists
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8100 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  redis:
+    image: redis:8-alpine
+    container_name: lumina-redis
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    container_name: lumina-seaweedfs
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - server
+      - -dir=/data
+      - -filer
+      - -s3
+      - -s3.port=8333
+      - -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "127.0.0.1:${SEAWEEDFS_S3_PORT:-8333}:8333"
+      - "127.0.0.1:${SEAWEEDFS_MASTER_PORT:-9333}:9333"
+      - "127.0.0.1:${SEAWEEDFS_FILER_PORT:-8888}:8888"
+    volumes:
+      - seaweedfs-data:/data
+    configs:
+      - source: seaweedfs-s3-config
+        target: /etc/seaweedfs/s3.json
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  model-service:
+    build: ./model-service
+    container_name: lumina-model
+    restart: unless-stopped
+    profiles: ["models"]
+    command:
+      - uvicorn
+      - app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - ${MODEL_WORKERS:-2}
+    environment:
+      MODEL_MODE: ${MODEL_MODE:-fake}
+      TAG_CONFIDENCE: ${MODEL_TAG_CONFIDENCE:-0.5}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:${MODEL_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./model-service/models:/models:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres-data:
+  h2-data:
+  h2-lib:
+  redis-data:
+  seaweedfs-data:
+
+configs:
+  seaweedfs-s3-config:
+    content: |
+      {
+        "identities": [
+          {
+            "name": "lumina",
+            "credentials": [
+              {
+                "accessKey": "${SEAWEEDFS_ACCESS_KEY:-lumina}",
+                "secretKey": "${SEAWEEDFS_SECRET_KEY:-lumina123}"
+              }
+            ],
+            "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+          }
+        ]
+      }

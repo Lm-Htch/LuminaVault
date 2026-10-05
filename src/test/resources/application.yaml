@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: LuminaVault
+  datasource:
+    url: jdbc:h2:mem:lumina_vault;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+lumina:
+  storage:
+    endpoint: http://localhost:8333
+    access-key: test
+    secret-key: test
+    bucket: test
+  jwt:
+    secret: test-secret-test-secret-test-secret-1234
+    access-ttl: 5m
+    refresh-ttl: 1h
