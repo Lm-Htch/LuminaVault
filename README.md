@@ -437,7 +437,6 @@ npm run build
 
 ## 文档
 
-- [`需求分析.md`](需求分析.md) —— 功能模块、精度与时效指标、输入输出约定、数据库设计、环境要求
 - [`mcp-server/README.md`](mcp-server/README.md) —— MCP 接入的完整说明与故障排查
 - [`docs/module-hierarchy.drawio`](docs/module-hierarchy.drawio) —— 模块层次图源文件
 

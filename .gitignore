@@ -46,3 +46,7 @@ build/
 ### VS Code ###
 .vscode/
 /cache/
+
+### Local docs (not published) ###
+需求分析.md
+
