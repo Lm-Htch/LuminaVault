@@ -1,5 +1,8 @@
 package com.lumi.vault.business.agent.service;
 
+import lombok.extern.slf4j.Slf4j;
+
+
 import com.lumi.vault.business.agent.client.AiClient;
 import com.lumi.vault.business.agent.config.AiProperties;
 import com.lumi.vault.business.agent.dto.AgentFeedbackRequest;
@@ -11,17 +14,14 @@ import com.lumi.vault.business.asset.entity.Asset;
 import com.lumi.vault.business.asset.mapper.AssetMapper;
 import com.lumi.vault.business.character.service.CharacterService;
 import com.lumi.vault.exception.ApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
+@Slf4j
 public class AgentFeedbackService {
-
-    private static final Logger log = LoggerFactory.getLogger(AgentFeedbackService.class);
 
     private final AssetMapper assetMapper;
     private final AssetFeedbackMapper feedbackMapper;

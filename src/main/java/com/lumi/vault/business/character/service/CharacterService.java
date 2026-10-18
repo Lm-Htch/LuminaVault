@@ -1,5 +1,8 @@
 package com.lumi.vault.business.character.service;
 
+import lombok.extern.slf4j.Slf4j;
+
+
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.lumi.vault.business.agent.entity.AssetEmbedding;
 import com.lumi.vault.business.agent.event.RecommendationInvalidatedEvent;
@@ -17,8 +20,6 @@ import com.lumi.vault.business.character.mapper.CharacterReferenceMapper;
 import com.lumi.vault.business.vector.mapper.VectorSearchMapper;
 import com.lumi.vault.config.VectorProperties;
 import com.lumi.vault.exception.ApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,9 +33,8 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
+@Slf4j
 public class CharacterService {
-
-    private static final Logger log = LoggerFactory.getLogger(CharacterService.class);
 
     private final CharacterMapper characterMapper;
     private final CharacterReferenceMapper referenceMapper;
@@ -160,11 +160,13 @@ public class CharacterService {
                 .eq(Asset::getId, assetId)
                 .set(Asset::getCharacterId, characterId)
                 .set(Asset::getCharacterConfidence, 1.0));
+        removeOtherReferences(assetId, characterId);
         ReferenceVector vector = referenceVector(assetId);
         if (vector != null) {
             upsertReference(characterId, assetId, vector.embedding(), vector.model(),
                     CharacterReference.SOURCE_MANUAL, 1.0);
         }
+        eventPublisher.publishEvent(new RecommendationInvalidatedEvent());
     }
 
     @Transactional
@@ -182,6 +184,7 @@ public class CharacterService {
                 .set(Asset::getCharacterId, characterId)
                 .set(Asset::getCharacterConfidence, 1.0));
         for (Long id : assetIds) {
+            removeOtherReferences(id, characterId);
             ReferenceVector vector = referenceVector(id);
             if (vector != null) {
                 upsertReference(characterId, id, vector.embedding(), vector.model(),
@@ -194,12 +197,27 @@ public class CharacterService {
 
     @Transactional
     public void unmarkAsset(Long assetId) {
-        requireActiveAsset(assetId);
+        Asset asset = requireActiveAsset(assetId);
+        Long formerCharacterId = asset.getCharacterId();
         assetMapper.update(null, Wrappers.<Asset>lambdaUpdate()
                 .eq(Asset::getId, assetId)
                 .set(Asset::getCharacterId, null)
                 .set(Asset::getCharacterConfidence, null));
+        if (formerCharacterId != null) {
+            referenceMapper.delete(Wrappers.<CharacterReference>lambdaQuery()
+                    .eq(CharacterReference::getAssetId, assetId)
+                    .eq(CharacterReference::getCharacterId, formerCharacterId));
+        }
         eventPublisher.publishEvent(new RecommendationInvalidatedEvent());
+    }
+
+    /**
+     * 校准：移除该资产在其它角色下的参考向量（避免错误识别持续影响匹配）。
+     */
+    private void removeOtherReferences(Long assetId, Long keepCharacterId) {
+        referenceMapper.delete(Wrappers.<CharacterReference>lambdaQuery()
+                .eq(CharacterReference::getAssetId, assetId)
+                .ne(CharacterReference::getCharacterId, keepCharacterId));
     }
 
     @Transactional

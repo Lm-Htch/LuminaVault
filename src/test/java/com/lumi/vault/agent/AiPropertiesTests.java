@@ -54,7 +54,8 @@ class AiPropertiesTests {
     @Test
     void disabledByDefault() {
         AiProperties properties = new AiProperties(false, AiProvider.OPENAI,
-                null, null, null, null, null, null, true, true, Duration.ofMinutes(5), 10485760,
+                null, null, null, null, null, null, true, true, true, Duration.ofHours(12), true, 6, 3,
+                Duration.ofMinutes(5), 10485760,
                 Duration.ofSeconds(30), Duration.ofSeconds(120));
         assertThat(properties.chatEnabled()).isFalse();
         assertThat(properties.visionEnabled()).isFalse();
@@ -64,7 +65,8 @@ class AiPropertiesTests {
     private AiProperties properties(AiProvider provider, String baseUrl, String chatModel,
                                     String embeddingBaseUrl, String embeddingModel) {
         return new AiProperties(true, provider, baseUrl, "test-key", chatModel,
-                embeddingBaseUrl, null, embeddingModel, true, true, Duration.ofMinutes(5), 10485760,
+                embeddingBaseUrl, null, embeddingModel, true, true, true, Duration.ofHours(12), true, 6, 3,
+                Duration.ofMinutes(5), 10485760,
                 Duration.ofSeconds(30), Duration.ofSeconds(120));
     }
 }

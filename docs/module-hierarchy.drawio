@@ -1,0 +1,83 @@
+<mxfile host="localhost">
+  <diagram id="3nvq6sh1-18e9" name="Page-1">
+    <mxGraphModel dx="1188" dy="738" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="whiteSpace=wrap;html=1;" value="LuminaVault 个人图片资产管理系统" vertex="1">
+          <mxGeometry height="56" width="300" x="463" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c1" parent="1" style="whiteSpace=wrap;html=1;" value="1、认证与用户" vertex="1">
+          <mxGeometry height="64" width="140" x="26" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" parent="1" style="whiteSpace=wrap;html=1;" value="2、资产库管理" vertex="1">
+          <mxGeometry height="64" width="140" x="194" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" parent="1" style="whiteSpace=wrap;html=1;" value="3、智能搜索" vertex="1">
+          <mxGeometry height="64" width="140" x="362" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" parent="1" style="whiteSpace=wrap;html=1;" value="4、相似与图谱" vertex="1">
+          <mxGeometry height="64" width="140" x="530" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" parent="1" style="whiteSpace=wrap;html=1;" value="5、角色" vertex="1">
+          <mxGeometry height="64" width="140" x="698" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" parent="1" style="whiteSpace=wrap;html=1;" value="6、来源与联网检索" vertex="1">
+          <mxGeometry height="64" width="140" x="866" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" parent="1" style="whiteSpace=wrap;html=1;" value="7、系统设置" vertex="1">
+          <mxGeometry height="64" width="140" x="1034" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="96" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="264" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="432" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c4">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c5">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="768" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c6">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="936" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=none;html=1;" target="c7">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1104" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

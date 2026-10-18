@@ -52,13 +52,14 @@ export interface AssetResponse {
   sha256: string
   description?: string | null
   characterId?: number | null
-  folderId?: number | null
+  folderIds: number[]
   createdAt: string
   updatedAt: string
 }
 
 export interface AssetDetailResponse extends AssetResponse {
   metadata?: AssetMetadata | null
+  characterConfidence?: number | null
   url: string
   thumbnailUrl?: string | null
 }
@@ -94,6 +95,7 @@ export interface AgentSearchResult {
   tags: string[]
   characterId?: number | null
   characterName?: string | null
+  verified?: boolean
 }
 
 export interface AgentSearchResponse {
@@ -101,6 +103,51 @@ export interface AgentSearchResponse {
   results: AgentSearchResult[]
   comment?: string | null
   aiEnabled: boolean
+  keywords?: string[]
+  colors?: string[]
+  excluded?: string[]
+  filters?: string[]
+}
+
+export interface SearchHistoryItem {
+  id: number
+  query: string
+  searchedAt: string
+}
+
+export interface SearchFavoriteItem {
+  id: number
+  query: string
+  assetIds: number[]
+  createdAt: string
+}
+
+export interface AssetWebSource {
+  provider: string
+  status: string
+  similarity?: number | null
+  sourceType?: string | null
+  sourceUrl?: string | null
+  sourceId?: string | null
+  title?: string | null
+  author?: string | null
+  characters: string[]
+}
+
+export interface SimilarAsset {
+  assetId: number
+  originalFilename: string
+  sha256: string
+  similarity: number
+}
+
+export interface AssetAnalysisPerception {
+  mood: string[]
+  style: string[]
+  tone: string[]
+  scene: string[]
+  usability: string[]
+  wallpaperScore: number
 }
 
 export interface AssetAnalysisResponse {
@@ -110,6 +157,7 @@ export interface AssetAnalysisResponse {
   status: string
   model?: string | null
   error?: string | null
+  perception?: AssetAnalysisPerception | null
 }
 
 export interface CharacterResponse {

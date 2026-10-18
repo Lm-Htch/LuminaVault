@@ -1,0 +1,37 @@
+# LuminaVault 感性查询词典：查询词=facet:规范值（多组用 ; 分隔）
+# facet 取值：mood / style / tone / scene / usability
+# 说明：查询包含 key（子串匹配）即触发对应特征扩展；LLM 意图解析产出的 facets 会与之合并
+温馨=mood:温馨,治愈;tone:暖色
+温暖=mood:温馨,治愈;tone:暖色
+治愈=mood:治愈,温馨
+舒服=mood:宁静,治愈
+舒适=mood:宁静,治愈
+宁静=mood:宁静
+安静=mood:宁静
+清新=mood:清新;tone:明亮
+清爽=mood:清新;tone:冷色
+梦幻=mood:梦幻
+唯美=mood:唯美
+浪漫=mood:浪漫;tone:粉彩
+可爱=mood:可爱
+温柔=mood:温馨,治愈
+热情=mood:热烈;tone:暖色
+热烈=mood:热烈;tone:暖色
+孤独=mood:孤独
+悲伤=mood:悲伤
+忧郁=mood:忧郁;tone:暗调
+暗黑=mood:暗黑;tone:暗调
+黑暗=mood:暗黑;tone:暗调
+高级感=style:极简;tone:低饱和
+ins风=style:极简;mood:清新
+极简=style:极简
+氛围感=mood:氛围感
+壁纸=usability:适合壁纸
+桌面=usability:适合壁纸
+头像=usability:适合头像
+手绘=style:手绘
+水彩=style:水彩
+写实=style:写实
+夜景=scene:夜晚;tone:暗调
+星空=scene:星空;mood:梦幻
+风景=scene:全景风景

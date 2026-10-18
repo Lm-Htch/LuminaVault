@@ -1,0 +1,37 @@
+# LuminaVault 标签→感知特征映射（WD14 小写标签=facet:规范值）
+# facet 取值：mood / style / tone / scene / usability
+# 说明：用于规则聚合（存量回填与 LLM 不可用时的兜底），LLM 视觉分析产出的特征会与之合并
+watercolor_(medium)=style:水彩
+traditional_media=style:手绘
+oil_painting=style:油画
+impressionism=style:印象派
+sketch=style:素描
+lineart=style:线稿
+flat_color=style:平涂
+realistic=style:写实
+pixel_art=style:像素
+3d=style:3D
+minimalism=style:极简
+chibi=style:Q版
+fantasy=mood:梦幻
+horror=mood:暗黑
+cute=mood:可爱
+monochrome=tone:单色
+greyscale=tone:灰度
+dark=tone:暗调
+pink_theme=tone:粉彩
+pastel_colors=tone:粉彩
+scenery=scene:全景风景
+starry_sky=scene:星空;mood:梦幻
+night=scene:夜晚;tone:暗调
+cityscape=scene:城市
+indoors=scene:室内
+outdoors=scene:户外
+beach=scene:海滩
+ocean=scene:海洋
+forest=scene:森林
+sky=scene:天空
+cherry_blossoms=scene:樱花
+sunset=scene:黄昏;tone:暖色
+snow=scene:雪景
+underwater=scene:水下

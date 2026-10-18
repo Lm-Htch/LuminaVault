@@ -4,6 +4,7 @@ import com.lumi.vault.business.asset.entity.Asset;
 import com.lumi.vault.business.asset.entity.AssetMetadata;
 
 import java.time.Instant;
+import java.util.List;
 
 public record AssetDetailResponse(
         Long id,
@@ -17,13 +18,14 @@ public record AssetDetailResponse(
         String description,
         AssetMetadata metadata,
         Long characterId,
-        Long folderId,
+        Double characterConfidence,
+        List<Long> folderIds,
         Instant createdAt,
         Instant updatedAt,
         String url,
         String thumbnailUrl) {
 
-    public static AssetDetailResponse from(Asset asset, String url, String thumbnailUrl) {
+    public static AssetDetailResponse from(Asset asset, String url, String thumbnailUrl, List<Long> folderIds) {
         return new AssetDetailResponse(
                 asset.getId(),
                 asset.getOriginalFilename(),
@@ -36,7 +38,8 @@ public record AssetDetailResponse(
                 asset.getDescription(),
                 asset.getMetadata(),
                 asset.getCharacterId(),
-                asset.getFolderId(),
+                asset.getCharacterConfidence(),
+                folderIds == null ? List.of() : folderIds,
                 asset.getCreatedAt(),
                 asset.getUpdatedAt(),
                 url,

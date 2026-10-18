@@ -32,5 +32,5 @@ export function AssetThumb({ assetId, alt, className }: AssetThumbProps) {
       </div>
     )
   }
-  return <img src={url} alt={alt} loading="lazy" className={className} />
+  return <img src={url} alt={alt} loading="lazy" decoding="async" className={className} />
 }

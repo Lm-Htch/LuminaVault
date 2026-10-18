@@ -22,6 +22,8 @@ public class Asset {
 
     private String originalFilename;
 
+    private String sortKey;
+
     private String author;
 
     private String contentType;
@@ -36,14 +38,14 @@ public class Asset {
 
     private String description;
 
+    private String colors;
+
     @TableField(typeHandler = AssetMetadataTypeHandler.class)
     private AssetMetadata metadata;
 
     private Long characterId;
 
     private Double characterConfidence;
-
-    private Long folderId;
 
     private Boolean deleted;
 

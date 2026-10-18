@@ -16,5 +16,6 @@ public record ModelProperties(
         @DefaultValue("http://localhost:8000") @NotBlank String baseUrl,
         @DefaultValue("10s") Duration connectTimeout,
         @DefaultValue("120s") Duration readTimeout,
-        @DefaultValue("0.5") @DecimalMin("0.0") @DecimalMax("1.0") double tagConfidence) {
+        @DefaultValue("0.5") @DecimalMin("0.0") @DecimalMax("1.0") double tagConfidence,
+        @DefaultValue("true") boolean rerank) {
 }

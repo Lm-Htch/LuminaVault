@@ -3,6 +3,7 @@ package com.lumi.vault.business.folder.controller;
 import com.lumi.vault.business.folder.dto.FolderAssignRequest;
 import com.lumi.vault.business.folder.dto.FolderBatchAssignRequest;
 import com.lumi.vault.business.folder.dto.FolderBatchClassifyRequest;
+import com.lumi.vault.business.folder.dto.FolderMergeRequest;
 import com.lumi.vault.business.folder.dto.FolderRequest;
 import com.lumi.vault.business.folder.dto.FolderResponse;
 import com.lumi.vault.business.folder.service.FolderService;
@@ -55,6 +56,16 @@ public class FolderController {
         return Result.ok(folderService.assignBatch(request.assetIds(), request.folderId()));
     }
 
+    @PostMapping("/assets/add")
+    public Result<Integer> addBatch(@Valid @RequestBody FolderBatchAssignRequest request) {
+        return Result.ok(folderService.addBatch(request.assetIds(), request.folderId()));
+    }
+
+    @PostMapping("/assets/remove")
+    public Result<Integer> removeBatch(@Valid @RequestBody FolderBatchAssignRequest request) {
+        return Result.ok(folderService.removeBatch(request.assetIds(), request.folderId()));
+    }
+
     @PostMapping("/classify")
     public Result<Integer> classifyBatch(@Valid @RequestBody FolderBatchClassifyRequest request) {
         return Result.ok(folderService.classifyBatch(request.assetIds()));
@@ -70,5 +81,10 @@ public class FolderController {
     public Result<Void> classify(@PathVariable Long assetId) {
         folderService.classify(assetId);
         return Result.ok();
+    }
+
+    @PostMapping("/{id}/merge")
+    public Result<Integer> merge(@PathVariable Long id, @Valid @RequestBody FolderMergeRequest request) {
+        return Result.ok(folderService.merge(id, request.targetFolderId()));
     }
 }

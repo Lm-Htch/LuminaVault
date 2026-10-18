@@ -36,6 +36,35 @@ lumina:
     trash-retention-days: ${LUMINA_ASSET_TRASH_RETENTION_DAYS:30}
     purge-cron: ${LUMINA_ASSET_PURGE_CRON:0 0 4 * * *}
     thumbnail-max-size: ${LUMINA_ASSET_THUMBNAIL_MAX_SIZE:480}
+  graph:
+    enabled: ${LUMINA_GRAPH_ENABLED:true}
+    edge-threshold: ${LUMINA_GRAPH_EDGE_THRESHOLD:0.72}
+    max-edges-per-asset: ${LUMINA_GRAPH_MAX_EDGES:10}
+    fetch-per-channel: ${LUMINA_GRAPH_FETCH_PER_CHANNEL:12}
+    wd14-weight: ${LUMINA_GRAPH_WD14_WEIGHT:0.6}
+    clip-weight: ${LUMINA_GRAPH_CLIP_WEIGHT:0.4}
+    single-channel-discount: ${LUMINA_GRAPH_SINGLE_CHANNEL_DISCOUNT:0.9}
+    duplicate-threshold: ${LUMINA_GRAPH_DUPLICATE_THRESHOLD:0.9}
+    route-weight: ${LUMINA_GRAPH_ROUTE_WEIGHT:0.8}
+    route-seed-limit: ${LUMINA_GRAPH_ROUTE_SEED_LIMIT:20}
+    route-neighbors: ${LUMINA_GRAPH_ROUTE_NEIGHBORS:8}
+    route-near-rank: ${LUMINA_GRAPH_ROUTE_NEAR_RANK:5}
+    route-mid-rank: ${LUMINA_GRAPH_ROUTE_MID_RANK:12}
+    route-decay-near: ${LUMINA_GRAPH_ROUTE_DECAY_NEAR:1.0}
+    route-decay-mid: ${LUMINA_GRAPH_ROUTE_DECAY_MID:0.6}
+    route-decay-far: ${LUMINA_GRAPH_ROUTE_DECAY_FAR:0.3}
+    feedback-one-hop-factor: ${LUMINA_GRAPH_FEEDBACK_1HOP:0.3}
+    feedback-two-hop-factor: ${LUMINA_GRAPH_FEEDBACK_2HOP:0.1}
+    feedback-edge-threshold: ${LUMINA_GRAPH_FEEDBACK_EDGE_MIN:0.8}
+    feedback-neighbor-limit: ${LUMINA_GRAPH_FEEDBACK_NEIGHBORS:10}
+    feedback-second-hop-limit: ${LUMINA_GRAPH_FEEDBACK_2HOP_NEIGHBORS:5}
+  perception:
+    wallpaper-threshold: ${LUMINA_PERCEPTION_WALLPAPER_THRESHOLD:0.6}
+    wallpaper-high-res-bonus: ${LUMINA_PERCEPTION_WALLPAPER_HIGH_RES:0.35}
+    wallpaper-mid-res-bonus: ${LUMINA_PERCEPTION_WALLPAPER_MID_RES:0.15}
+    wallpaper-landscape-bonus: ${LUMINA_PERCEPTION_WALLPAPER_LANDSCAPE:0.15}
+    wallpaper-scenery-bonus: ${LUMINA_PERCEPTION_WALLPAPER_SCENERY:0.2}
+    wallpaper-bright-palette-bonus: ${LUMINA_PERCEPTION_WALLPAPER_BRIGHT:0.1}
   ai:
     enabled: ${LUMINA_AI_ENABLED:false}
     provider: ${LUMINA_AI_PROVIDER:ollama}
@@ -47,6 +76,11 @@ lumina:
     embedding-model: ${LUMINA_AI_EMBEDDING_MODEL:}
     vision: ${LUMINA_AI_VISION:true}
     rerank: ${LUMINA_AI_RERANK:true}
+    analyze-query: ${LUMINA_AI_ANALYZE_QUERY:true}
+    query-analyze-ttl: ${LUMINA_AI_QUERY_ANALYZE_TTL:12h}
+    verify: ${LUMINA_AI_VERIFY:true}
+    verify-batch-size: ${LUMINA_AI_VERIFY_BATCH_SIZE:6}
+    verify-batch-concurrency: ${LUMINA_AI_VERIFY_CONCURRENCY:3}
     max-image-bytes: ${LUMINA_AI_MAX_IMAGE_BYTES:10485760}
     connect-timeout: ${LUMINA_AI_CONNECT_TIMEOUT:30s}
     read-timeout: ${LUMINA_AI_READ_TIMEOUT:120s}
@@ -62,6 +96,18 @@ lumina:
     connect-timeout: ${LUMINA_MODEL_CONNECT_TIMEOUT:10s}
     read-timeout: ${LUMINA_MODEL_READ_TIMEOUT:120s}
     tag-confidence: ${LUMINA_MODEL_TAG_CONFIDENCE:0.5}
+  web-search:
+    enabled: ${LUMINA_WEB_SEARCH_ENABLED:false}
+    provider: ${LUMINA_WEB_SEARCH_PROVIDER:saucenao}
+    api-key: ${LUMINA_WEB_SEARCH_API_KEY:}
+    base-url: ${LUMINA_WEB_SEARCH_BASE_URL:https://saucenao.com}
+    proxy: ${LUMINA_WEB_SEARCH_PROXY:}
+    min-similarity: ${LUMINA_WEB_SEARCH_MIN_SIMILARITY:0.75}
+    auto-on-upload: ${LUMINA_WEB_SEARCH_AUTO:true}
+    daily-quota: ${LUMINA_WEB_SEARCH_DAILY_QUOTA:2000}
+    request-delay-ms: ${LUMINA_WEB_SEARCH_DELAY_MS:2000}
+    connect-timeout: ${LUMINA_WEB_SEARCH_CONNECT_TIMEOUT:10s}
+    read-timeout: ${LUMINA_WEB_SEARCH_READ_TIMEOUT:30s}
   vector:
     enabled: ${LUMINA_VECTOR_ENABLED:true}
     image-model: ${LUMINA_VECTOR_IMAGE_MODEL:wd14-image}

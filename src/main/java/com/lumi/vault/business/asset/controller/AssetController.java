@@ -6,10 +6,14 @@ import com.lumi.vault.business.asset.dto.AssetResponse;
 import com.lumi.vault.business.asset.dto.AssetSettingsRequest;
 import com.lumi.vault.business.asset.dto.AssetSettingsResponse;
 import com.lumi.vault.business.asset.dto.AssetUrlResponse;
+import com.lumi.vault.business.asset.dto.SimilarAssetResponse;
 import com.lumi.vault.business.asset.dto.TrashAssetResponse;
 import com.lumi.vault.business.asset.dto.UpdateAssetRequest;
 import com.lumi.vault.business.asset.service.AssetService;
 import com.lumi.vault.business.asset.service.AssetSettingsService;
+import com.lumi.vault.business.asset.service.AssetSimilarityService;
+import com.lumi.vault.business.websearch.dto.WebSourceResponse;
+import com.lumi.vault.business.websearch.service.WebSourceService;
 import com.lumi.vault.common.PageResult;
 import com.lumi.vault.common.Result;
 import jakarta.validation.Valid;
@@ -28,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/assets")
@@ -35,19 +40,25 @@ public class AssetController {
 
     private final AssetService assetService;
     private final AssetSettingsService settingsService;
+    private final WebSourceService webSourceService;
+    private final AssetSimilarityService similarityService;
 
-    public AssetController(AssetService assetService, AssetSettingsService settingsService) {
+    public AssetController(AssetService assetService, AssetSettingsService settingsService,
+                           WebSourceService webSourceService, AssetSimilarityService similarityService) {
         this.assetService = assetService;
         this.settingsService = settingsService;
+        this.webSourceService = webSourceService;
+        this.similarityService = similarityService;
     }
 
     @GetMapping
     public Result<PageResult<AssetResponse>> list(@RequestParam(defaultValue = "1") long page,
                                                   @RequestParam(defaultValue = "20") long size,
                                                   @RequestParam(required = false) String keyword,
-                                                  @RequestParam(required = false) Long folderId,
-                                                  @RequestParam(defaultValue = "false") boolean uncategorized) {
-        return Result.ok(assetService.list(page, size, keyword, folderId, uncategorized));
+                @RequestParam(required = false) Long folderId,
+                @RequestParam(defaultValue = "false") boolean uncategorized,
+                @RequestParam(required = false) String sort) {
+        return Result.ok(assetService.list(page, size, keyword, folderId, uncategorized, sort));
     }
 
     @GetMapping("/search")
@@ -56,9 +67,10 @@ public class AssetController {
                                                     @RequestParam(required = false) String filename,
                                                     @RequestParam(required = false) String author,
                                                     @RequestParam(defaultValue = "false") boolean exact,
-                                                    @RequestParam(required = false) Long folderId,
-                                                    @RequestParam(defaultValue = "false") boolean uncategorized) {
-        return Result.ok(assetService.search(page, size, filename, author, exact, folderId, uncategorized));
+                @RequestParam(required = false) Long folderId,
+                @RequestParam(defaultValue = "false") boolean uncategorized,
+                @RequestParam(required = false) String sort) {
+        return Result.ok(assetService.search(page, size, filename, author, exact, folderId, uncategorized, sort));
     }
 
     @PostMapping
@@ -132,5 +144,43 @@ public class AssetController {
     public Result<Void> purge(@PathVariable Long id) {
         assetService.purge(id);
         return Result.ok();
+    }
+
+    @GetMapping("/{id}/source")
+    public Result<WebSourceResponse> source(@PathVariable Long id) {
+        return Result.ok(webSourceService.source(id));
+    }
+
+    @PostMapping("/{id}/source-lookup")
+    public Result<WebSourceResponse> sourceLookup(@PathVariable Long id) {
+        return Result.ok(webSourceService.lookup(id, true));
+    }
+
+    @PostMapping("/source-lookup")
+    public Result<Integer> sourceLookupBatch(@Valid @RequestBody AssetBatchRequest request) {
+        return Result.ok(webSourceService.enqueue(request.assetIds()));
+    }
+
+    @GetMapping("/{id}/similar")
+    public Result<List<SimilarAssetResponse>> similar(@PathVariable Long id,
+                                                      @RequestParam(defaultValue = "12") int limit) {
+        return Result.ok(similarityService.similarByAsset(id, limit));
+    }
+
+    @GetMapping("/{id}/related")
+    public Result<List<SimilarAssetResponse>> related(@PathVariable Long id,
+                                                      @RequestParam(defaultValue = "12") int limit) {
+        return Result.ok(assetService.related(id, limit));
+    }
+
+    @PostMapping("/similar-search")
+    public Result<List<SimilarAssetResponse>> similarSearch(@RequestPart("file") MultipartFile file,
+                                                            @RequestParam(defaultValue = "12") int limit)
+            throws IOException {
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+            throw com.lumi.vault.exception.ApiException.badRequest("仅支持图片文件");
+        }
+        return Result.ok(similarityService.similarByImage(file.getBytes(), contentType, limit));
     }
 }

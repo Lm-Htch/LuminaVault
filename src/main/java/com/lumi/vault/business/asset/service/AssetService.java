@@ -1,12 +1,17 @@
 package com.lumi.vault.business.asset.service;
 
+import lombok.extern.slf4j.Slf4j;
+
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lumi.vault.business.asset.dto.AssetContentResponse;
 import com.lumi.vault.business.asset.dto.AssetDetailResponse;
 import com.lumi.vault.business.asset.dto.AssetResponse;
 import com.lumi.vault.business.asset.dto.AssetUrlResponse;
+import com.lumi.vault.business.asset.dto.SimilarAssetResponse;
 import com.lumi.vault.business.asset.dto.TrashAssetResponse;
 import com.lumi.vault.business.asset.dto.UpdateAssetRequest;
 import com.lumi.vault.business.asset.entity.Asset;
@@ -14,12 +19,12 @@ import com.lumi.vault.business.asset.event.AssetPurgingEvent;
 import com.lumi.vault.business.asset.event.AssetUploadedEvent;
 import com.lumi.vault.business.asset.mapper.AssetMapper;
 import com.lumi.vault.business.asset.storage.AssetStorage;
+import com.lumi.vault.common.NaturalSortKey;
 import com.lumi.vault.common.PageResult;
 import com.lumi.vault.config.StorageProperties;
 import com.lumi.vault.business.folder.service.FolderService;
+import com.lumi.vault.business.graph.service.AssetSimilarityGraphService;
 import com.lumi.vault.exception.ApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -37,14 +42,18 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class AssetService {
-
-    private static final Logger log = LoggerFactory.getLogger(AssetService.class);
     private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM");
     private static final int MAX_PAGE_SIZE = 100;
     private static final int PURGE_BATCH_SIZE = 200;
@@ -56,6 +65,7 @@ public class AssetService {
     private final StorageProperties storageProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final FolderService folderService;
+    private final AssetSimilarityGraphService similarityGraphService;
 
     public AssetService(AssetMapper assetMapper,
                         AssetStorage assetStorage,
@@ -63,7 +73,8 @@ public class AssetService {
                         AssetSettingsService settingsService,
                         StorageProperties storageProperties,
                         ApplicationEventPublisher eventPublisher,
-                        FolderService folderService) {
+                        FolderService folderService,
+                        AssetSimilarityGraphService similarityGraphService) {
         this.assetMapper = assetMapper;
         this.assetStorage = assetStorage;
         this.imageProcessor = imageProcessor;
@@ -71,6 +82,34 @@ public class AssetService {
         this.storageProperties = storageProperties;
         this.eventPublisher = eventPublisher;
         this.folderService = folderService;
+        this.similarityGraphService = similarityGraphService;
+    }
+
+    /**
+     * 「相关图片」：相似度图的直接邻居（无向、稳定），已过滤软删除资产。
+     */
+    public List<SimilarAssetResponse> related(Long id, int limit) {
+        requireAsset(id, false);
+        int clamped = Math.min(Math.max(limit, 1), 50);
+        List<AssetSimilarityGraphService.Neighbor> neighbors = similarityGraphService.neighborsOf(id, clamped);
+        if (neighbors.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Asset> assets = assetMapper.selectList(Wrappers.<Asset>lambdaQuery()
+                        .in(Asset::getId, neighbors.stream().map(AssetSimilarityGraphService.Neighbor::assetId).toList())
+                        .eq(Asset::getDeleted, false))
+                .stream()
+                .collect(Collectors.toMap(Asset::getId, Function.identity(), (left, right) -> left));
+        List<SimilarAssetResponse> responses = new ArrayList<>();
+        for (AssetSimilarityGraphService.Neighbor neighbor : neighbors) {
+            Asset asset = assets.get(neighbor.assetId());
+            if (asset == null) {
+                continue;
+            }
+            responses.add(new SimilarAssetResponse(asset.getId(), asset.getOriginalFilename(), asset.getSha256(),
+                    Math.round(neighbor.score() * 10000) / 10000.0));
+        }
+        return responses;
     }
 
     @Transactional
@@ -96,7 +135,7 @@ public class AssetService {
                     throw ApiException.conflict("图片已存在");
                 }
                 restore(existing);
-                return AssetResponse.from(existing);
+                return AssetResponse.from(existing, folderService.folderIdsOf(existing.getId()));
             }
 
             String originalFilename = sanitizeFilename(file.getOriginalFilename());
@@ -118,6 +157,7 @@ public class AssetService {
             asset.setStorageKey(storageKey);
             asset.setThumbnailKey(thumbnailKey);
             asset.setOriginalFilename(originalFilename);
+            asset.setSortKey(NaturalSortKey.of(originalFilename));
             asset.setAuthor(processed.metadata() == null ? null : processed.metadata().author());
             asset.setContentType(contentType);
             asset.setSizeBytes(Files.size(tempFile));
@@ -125,16 +165,17 @@ public class AssetService {
             asset.setHeight(processed.height());
             asset.setSha256(sha256);
             asset.setDescription(description);
+            asset.setColors(processed.colors());
             asset.setMetadata(processed.metadata());
-            asset.setFolderId(folderId);
             asset.setDeleted(false);
             try {
                 assetMapper.insert(asset);
             } catch (DuplicateKeyException e) {
                 throw ApiException.conflict("图片已存在");
             }
+            folderService.attach(asset.getId(), folderId);
             eventPublisher.publishEvent(new AssetUploadedEvent(asset.getId()));
-            return AssetResponse.from(asset);
+            return AssetResponse.from(asset, folderId == null ? List.of() : List.of(folderId));
         } finally {
             Files.deleteIfExists(tempFile);
             if (thumbnailFile != null) {
@@ -143,24 +184,25 @@ public class AssetService {
         }
     }
 
-    public PageResult<AssetResponse> list(long page, long size, String keyword, Long folderId, boolean uncategorized) {
+    public PageResult<AssetResponse> list(long page, long size, String keyword, Long folderId, boolean uncategorized,
+                                          String sort) {
         LambdaQueryWrapper<Asset> query = Wrappers.<Asset>lambdaQuery()
-                .eq(Asset::getDeleted, false)
-                .orderByDesc(Asset::getCreatedAt)
-                .orderByDesc(Asset::getId);
+                .eq(Asset::getDeleted, false);
         if (keyword != null && !keyword.isBlank()) {
             query.like(Asset::getOriginalFilename, keyword.trim());
         }
         applyFolderFilter(query, folderId, uncategorized);
-        return PageResult.of(page(page, size, query), AssetResponse::from);
+        applySort(query, sort);
+        Page<Asset> result = page(page, size, query);
+        Map<Long, List<Long>> folderIds = folderService.folderIdsByAssets(
+                result.getRecords().stream().map(Asset::getId).toList());
+        return PageResult.of(result, asset -> AssetResponse.from(asset, folderIds.getOrDefault(asset.getId(), List.of())));
     }
 
     public PageResult<AssetResponse> search(long page, long size, String filename, String author, boolean exact,
-                                            Long folderId, boolean uncategorized) {
+                                            Long folderId, boolean uncategorized, String sort) {
         LambdaQueryWrapper<Asset> query = Wrappers.<Asset>lambdaQuery()
-                .eq(Asset::getDeleted, false)
-                .orderByDesc(Asset::getCreatedAt)
-                .orderByDesc(Asset::getId);
+                .eq(Asset::getDeleted, false);
         if (filename != null && !filename.isBlank()) {
             String value = filename.trim();
             if (exact) {
@@ -178,14 +220,30 @@ public class AssetService {
             }
         }
         applyFolderFilter(query, folderId, uncategorized);
-        return PageResult.of(page(page, size, query), AssetResponse::from);
+        applySort(query, sort);
+        Page<Asset> result = page(page, size, query);
+        Map<Long, List<Long>> folderIds = folderService.folderIdsByAssets(
+                result.getRecords().stream().map(Asset::getId).toList());
+        return PageResult.of(result, asset -> AssetResponse.from(asset, folderIds.getOrDefault(asset.getId(), List.of())));
+    }
+
+    private void applySort(LambdaQueryWrapper<Asset> query, String sort) {
+        String value = sort == null ? "" : sort.trim().toLowerCase(Locale.ROOT);
+        switch (value) {
+            case "name_desc" -> query.orderByDesc(Asset::getSortKey).orderByDesc(Asset::getId);
+            case "created_desc" -> query.orderByDesc(Asset::getCreatedAt).orderByDesc(Asset::getId);
+            case "created_asc" -> query.orderByAsc(Asset::getCreatedAt).orderByAsc(Asset::getId);
+            case "size_desc" -> query.orderByDesc(Asset::getSizeBytes).orderByDesc(Asset::getId);
+            case "size_asc" -> query.orderByAsc(Asset::getSizeBytes).orderByAsc(Asset::getId);
+            default -> query.orderByAsc(Asset::getSortKey).orderByAsc(Asset::getId);
+        }
     }
 
     private void applyFolderFilter(LambdaQueryWrapper<Asset> query, Long folderId, boolean uncategorized) {
         if (folderId != null) {
-            query.eq(Asset::getFolderId, folderId);
+            query.exists("select 1 from asset_folder af where af.asset_id = asset.id and af.folder_id = {0}", folderId);
         } else if (uncategorized) {
-            query.isNull(Asset::getFolderId);
+            query.notExists("select 1 from asset_folder af where af.asset_id = asset.id");
         }
     }
 
@@ -194,7 +252,7 @@ public class AssetService {
         String url = presignUrl(asset.getStorageKey(), asset.getOriginalFilename(), false);
         String thumbnailUrl = asset.getThumbnailKey() == null ? null
                 : presignUrl(asset.getThumbnailKey(), asset.getOriginalFilename(), false);
-        return AssetDetailResponse.from(asset, url, thumbnailUrl);
+        return AssetDetailResponse.from(asset, url, thumbnailUrl, folderService.folderIdsOf(id));
     }
 
     @Transactional
@@ -202,7 +260,9 @@ public class AssetService {
         Asset asset = requireAsset(id, false);
         boolean changed = false;
         if (request.originalFilename() != null && !request.originalFilename().isBlank()) {
-            asset.setOriginalFilename(sanitizeFilename(request.originalFilename()));
+            String filename = sanitizeFilename(request.originalFilename());
+            asset.setOriginalFilename(filename);
+            asset.setSortKey(NaturalSortKey.of(filename));
             changed = true;
         }
         if (request.author() != null) {
@@ -216,7 +276,7 @@ public class AssetService {
         if (changed) {
             assetMapper.updateById(asset);
         }
-        return AssetResponse.from(asset);
+        return AssetResponse.from(asset, folderService.folderIdsOf(asset.getId()));
     }
 
     @Transactional
@@ -347,6 +407,19 @@ public class AssetService {
         return new AssetUrlResponse(
                 presignUrl(asset.getStorageKey(), asset.getOriginalFilename(), download),
                 Instant.now().plus(storageProperties.presignExpiry()));
+    }
+
+    /**
+     * 直接读取资产字节。{@code thumbnail=true} 时优先返回缩略图，缩略图缺失则回退原图。
+     */
+    public AssetContentResponse content(Long id, boolean thumbnail) {
+        Asset asset = requireAsset(id, false);
+        boolean useThumbnail = thumbnail && asset.getThumbnailKey() != null;
+        String key = useThumbnail ? asset.getThumbnailKey() : asset.getStorageKey();
+        String contentType = useThumbnail
+                ? ("image/png".equalsIgnoreCase(asset.getContentType()) ? "image/png" : "image/jpeg")
+                : asset.getContentType();
+        return new AssetContentResponse(assetStorage.get(key), contentType, asset.getOriginalFilename());
     }
 
     private void restore(Asset asset) {

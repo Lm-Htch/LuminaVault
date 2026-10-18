@@ -3,3 +3,8 @@ uvicorn[standard]>=0.32
 pillow>=10.0
 numpy>=1.26
 onnxruntime>=1.19
+tokenizers>=0.19
+# 可选：OCR（图内文字），未安装时 /v1/analyze 不含 ocr_text
+rapidocr-onnxruntime>=1.4
+# rapidocr 默拉 opencv-python（依赖 GUI 系统库），改用 headless
+opencv-python-headless>=4.9

@@ -10,5 +10,6 @@ public record AgentSearchResult(
         String description,
         List<String> tags,
         Long characterId,
-        String characterName) {
+        String characterName,
+        boolean verified) {
 }

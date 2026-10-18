@@ -3,6 +3,7 @@ package com.lumi.vault.business.asset.dto;
 import com.lumi.vault.business.asset.entity.Asset;
 
 import java.time.Instant;
+import java.util.List;
 
 public record AssetResponse(
         Long id,
@@ -15,11 +16,11 @@ public record AssetResponse(
         String sha256,
         String description,
         Long characterId,
-        Long folderId,
+        List<Long> folderIds,
         Instant createdAt,
         Instant updatedAt) {
 
-    public static AssetResponse from(Asset asset) {
+    public static AssetResponse from(Asset asset, List<Long> folderIds) {
         return new AssetResponse(
                 asset.getId(),
                 asset.getOriginalFilename(),
@@ -31,7 +32,7 @@ public record AssetResponse(
                 asset.getSha256(),
                 asset.getDescription(),
                 asset.getCharacterId(),
-                asset.getFolderId(),
+                folderIds == null ? List.of() : folderIds,
                 asset.getCreatedAt(),
                 asset.getUpdatedAt());
     }

@@ -27,11 +27,17 @@ public class AssetEmbedding {
 
     private String characterTags;
 
+    private String ocrText;
+
+    private String perception;
+
     private String embedding;
 
     private String imageEmbedding;
 
     private String imageModel;
+
+    private String clipEmbedding;
 
     private String model;
 

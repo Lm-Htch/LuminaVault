@@ -8,6 +8,7 @@ import com.lumi.vault.business.asset.entity.Asset;
 import com.lumi.vault.business.asset.mapper.AssetMapper;
 import com.lumi.vault.business.asset.storage.AssetStorage;
 import com.lumi.vault.business.folder.entity.Folder;
+import com.lumi.vault.business.folder.mapper.AssetFolderMapper;
 import com.lumi.vault.business.folder.mapper.FolderMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,6 +62,9 @@ class FolderFlowTests {
 
     @Autowired
     FolderMapper folderMapper;
+
+    @Autowired
+    AssetFolderMapper assetFolderMapper;
 
     @Autowired
     AssetEnrichmentService enrichmentService;
@@ -95,7 +100,7 @@ class FolderFlowTests {
         long folderId = createFolder(token, "风景", "自然风景与壁纸");
 
         long assetId = upload(token, "manual.png", pngBytes(40, 30), folderId);
-        assertThat(assetMapper.selectById(assetId).getFolderId()).isEqualTo(folderId);
+        assertThat(folderIdsOf(assetId)).containsExactly(folderId);
 
         mockMvc.perform(get("/api/folders").header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())
@@ -114,7 +119,56 @@ class FolderFlowTests {
         mockMvc.perform(delete("/api/folders/" + folderId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk());
-        assertThat(assetMapper.selectById(assetId).getFolderId()).isNull();
+        assertThat(folderIdsOf(assetId)).isEmpty();
+    }
+
+    @Test
+    void assetCanBelongToMultipleFolders() throws Exception {
+        String token = register();
+        long scenery = createFolder(token, "风景", null);
+        long wallpaper = createFolder(token, "壁纸", null);
+        long assetId = upload(token, "multi.png", pngBytes(45, 30), scenery);
+
+        mockMvc.perform(post("/api/folders/assets/add")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assetIds\":[" + assetId + "],\"folderId\":" + wallpaper + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(1));
+        assertThat(folderIdsOf(assetId)).containsExactlyInAnyOrder(scenery, wallpaper);
+
+        mockMvc.perform(get("/api/assets").param("folderId", String.valueOf(wallpaper))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(jsonPath("$.data.total").value(1));
+        mockMvc.perform(get("/api/folders").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(jsonPath("$.data[?(@.name == '风景')].assetCount").value(1))
+                .andExpect(jsonPath("$.data[?(@.name == '壁纸')].assetCount").value(1));
+
+        mockMvc.perform(post("/api/folders/assets/remove")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assetIds\":[" + assetId + "],\"folderId\":" + scenery + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(1));
+        assertThat(folderIdsOf(assetId)).containsExactly(wallpaper);
+
+        mockMvc.perform(put("/api/folders/assets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assetIds\":[" + assetId + "],\"folderId\":" + scenery + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(1));
+        assertThat(folderIdsOf(assetId)).containsExactly(scenery);
+
+        mockMvc.perform(put("/api/folders/assets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"assetIds\":[" + assetId + "],\"folderId\":null}"))
+                .andExpect(status().isOk());
+        assertThat(folderIdsOf(assetId)).isEmpty();
+        mockMvc.perform(get("/api/assets").param("uncategorized", "true")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(jsonPath("$.data.total").value(1));
     }
 
     @Test
@@ -126,7 +180,7 @@ class FolderFlowTests {
         long assetId = upload(token, "auto-existing.png", pngBytes(41, 30), null);
         enrichmentService.enrich(assetId);
 
-        assertThat(assetMapper.selectById(assetId).getFolderId()).isEqualTo(folderId);
+        assertThat(folderIdsOf(assetId)).containsExactly(folderId);
     }
 
     @Test
@@ -136,11 +190,64 @@ class FolderFlowTests {
         long assetId = upload(token, "auto-new.png", pngBytes(42, 30), null);
         enrichmentService.enrich(assetId);
 
-        Asset stored = assetMapper.selectById(assetId);
-        assertThat(stored.getFolderId()).isNotNull();
-        Folder folder = folderMapper.selectById(stored.getFolderId());
+        List<Long> folderIds = folderIdsOf(assetId);
+        assertThat(folderIds).hasSize(1);
+        Folder folder = folderMapper.selectById(folderIds.get(0));
         assertThat(folder.getName()).isEqualTo("UI素材");
         assertThat(folder.getAutoCreated()).isTrue();
+    }
+
+    @Test
+    void agentReusesSimilarFolderInsteadOfCreating() throws Exception {
+        String token = register();
+        long existing = createFolder(token, "星空夜景", null);
+
+        // 模型建议新名「星空夜空」——与已有文件夹近义，应复用而不是新建
+        aiClient.setCompletion("{\"folderId\":null,\"newFolderName\":\"星空夜空\"}");
+        long a1 = upload(token, "auto-similar.png", pngBytes(45, 30), null);
+        enrichmentService.enrich(a1);
+
+        assertThat(folderIdsOf(a1)).containsExactly(existing);
+        assertThat(folderMapper.selectCount(null)).isEqualTo(1);
+
+        // 与已有主题不同：正常新建
+        aiClient.setCompletion("{\"folderId\":null,\"newFolderName\":\"美食甜点\"}");
+        long a2 = upload(token, "auto-distinct.png", pngBytes(46, 30), null);
+        enrichmentService.enrich(a2);
+
+        assertThat(folderMapper.selectCount(null)).isEqualTo(2);
+        Folder created = folderMapper.selectById(folderIdsOf(a2).get(0));
+        assertThat(created.getName()).isEqualTo("美食甜点");
+        assertThat(created.getAutoCreated()).isTrue();
+    }
+
+    @Test
+    void mergeMovesMembersAndDeletesSource() throws Exception {
+        String token = register();
+        long source = createFolder(token, "星空幻想", null);
+        long target = createFolder(token, "星空夜景", null);
+        long a1 = upload(token, "merge-1.png", pngBytes(47, 30), source);
+        long a2 = upload(token, "merge-2.png", pngBytes(48, 30), source);
+
+        mockMvc.perform(post("/api/folders/" + source + "/merge")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetFolderId\":" + target + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(2));
+
+        assertThat(folderIdsOf(a1)).containsExactly(target);
+        assertThat(folderIdsOf(a2)).containsExactly(target);
+        mockMvc.perform(get("/api/folders").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].name").value("星空夜景"))
+                .andExpect(jsonPath("$.data[0].assetCount").value(2));
+
+        mockMvc.perform(post("/api/folders/" + target + "/merge")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetFolderId\":" + target + "}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -157,8 +264,8 @@ class FolderFlowTests {
                         .content("{\"assetIds\":[" + a1 + "," + a2 + "],\"folderId\":" + folderId + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").value(2));
-        assertThat(assetMapper.selectById(a1).getFolderId()).isEqualTo(folderId);
-        assertThat(assetMapper.selectById(a2).getFolderId()).isEqualTo(folderId);
+        assertThat(folderIdsOf(a1)).containsExactly(folderId);
+        assertThat(folderIdsOf(a2)).containsExactly(folderId);
 
         mockMvc.perform(post("/api/assets/batch/delete")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
@@ -175,6 +282,10 @@ class FolderFlowTests {
                         .content("{\"assetIds\":[" + a1 + "]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").value(1));
+    }
+
+    private List<Long> folderIdsOf(long assetId) {
+        return assetFolderMapper.folderIdsOf(assetId);
     }
 
     private long createFolder(String token, String name, String description) throws Exception {

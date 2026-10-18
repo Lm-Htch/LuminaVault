@@ -6,5 +6,9 @@ public record AgentSearchResponse(
         String query,
         List<AgentSearchResult> results,
         String comment,
-        boolean aiEnabled) {
+        boolean aiEnabled,
+        List<String> keywords,
+        List<String> colors,
+        List<String> excluded,
+        List<String> filters) {
 }

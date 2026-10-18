@@ -2,6 +2,7 @@ package com.lumi.vault.agent;
 
 import com.lumi.vault.business.agent.client.AiClient;
 import com.lumi.vault.business.agent.client.ImageAnalysis;
+import com.lumi.vault.business.agent.client.VisionImage;
 
 import java.util.List;
 
@@ -11,9 +12,14 @@ public class FakeAiClient implements AiClient {
     private boolean vision = true;
     private boolean embedding = true;
     private String completion = "{\"comment\":\"fake\",\"results\":[]}";
+    private String imageCompletion;
 
     public void setCompletion(String completion) {
         this.completion = completion;
+    }
+
+    public void setImageCompletion(String imageCompletion) {
+        this.imageCompletion = imageCompletion;
     }
 
     public void setAvailable(boolean available) {
@@ -48,9 +54,15 @@ public class FakeAiClient implements AiClient {
         return available;
     }
 
+    private ImageAnalysis imageAnalysis = ImageAnalysis.of("测试图片描述", List.of("测试", "图片"));
+
+    public void setImageAnalysis(ImageAnalysis imageAnalysis) {
+        this.imageAnalysis = imageAnalysis;
+    }
+
     @Override
     public ImageAnalysis analyzeImage(byte[] image, String contentType) {
-        return new ImageAnalysis("测试图片描述", List.of("测试", "图片"));
+        return imageAnalysis;
     }
 
     @Override
@@ -64,5 +76,10 @@ public class FakeAiClient implements AiClient {
     @Override
     public String complete(String systemPrompt, String userPrompt) {
         return completion;
+    }
+
+    @Override
+    public String completeWithImages(String systemPrompt, String userPrompt, List<VisionImage> images) {
+        return imageCompletion;
     }
 }

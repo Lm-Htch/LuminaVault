@@ -8,6 +8,7 @@ import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { GalleryPage } from './pages/GalleryPage'
+import { FoldersPage } from './pages/FoldersPage'
 import { AssetDetailPage } from './pages/AssetDetailPage'
 import { TrashPage } from './pages/TrashPage'
 import { AgentSearchPage } from './pages/AgentSearchPage'
@@ -26,6 +27,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route index element={<GalleryPage />} />
+              <Route path="/folders" element={<FoldersPage />} />
               <Route path="/assets/:id" element={<AssetDetailPage />} />
               <Route path="/agent" element={<AgentSearchPage />} />
               <Route path="/characters" element={<CharactersPage />} />

@@ -1,5 +1,8 @@
 package com.lumi.vault.business.character.service;
 
+import lombok.extern.slf4j.Slf4j;
+
+
 import com.lumi.vault.business.agent.entity.AssetEmbedding;
 import com.lumi.vault.business.agent.mapper.AssetEmbeddingMapper;
 import com.lumi.vault.business.agent.util.VectorUtils;
@@ -11,8 +14,6 @@ import com.lumi.vault.business.character.mapper.CharacterReferenceMapper;
 import com.lumi.vault.business.vector.dto.CharacterVectorMatch;
 import com.lumi.vault.business.vector.mapper.VectorSearchMapper;
 import com.lumi.vault.config.VectorProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
@@ -23,9 +24,8 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 @Service
+@Slf4j
 public class CharacterMatchService {
-
-    private static final Logger log = LoggerFactory.getLogger(CharacterMatchService.class);
     private static final int ANN_LIMIT = 5;
 
     private final CharacterMapper characterMapper;

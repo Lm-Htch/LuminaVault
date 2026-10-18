@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { fetchAssetDetail, invalidateAssetDetail } from '../api/assetDetailCache'
+import { AssetThumb } from '../components/AssetThumb'
 import { useConfirm } from '../components/ConfirmProvider'
 import { useToast } from '../components/ToastProvider'
-import type { AssetAnalysisResponse, AssetDetailResponse, CharacterResponse, FolderResponse } from '../api/types'
+import type {
+  AssetAnalysisResponse,
+  AssetDetailResponse,
+  AssetWebSource,
+  CharacterResponse,
+  FolderResponse,
+  SimilarAsset,
+} from '../api/types'
 import { formatBytes, formatDate } from '../utils/format'
 
 const statusClass: Record<string, string> = {
@@ -13,10 +21,21 @@ const statusClass: Record<string, string> = {
   SKIPPED: 'chip',
 }
 
+type PerceptionFacetKey = 'mood' | 'style' | 'tone' | 'scene' | 'usability'
+
+const perceptionFacetLabels: Array<[PerceptionFacetKey, string]> = [
+  ['mood', '氛围'],
+  ['style', '风格'],
+  ['tone', '色调'],
+  ['scene', '场景'],
+  ['usability', '用途'],
+]
+
 export function AssetDetailPage() {
   const { id } = useParams()
   const assetId = Number(id)
   const navigate = useNavigate()
+  const location = useLocation()
   const confirm = useConfirm()
   const toast = useToast()
   const [detail, setDetail] = useState<AssetDetailResponse | null>(null)
@@ -28,6 +47,65 @@ export function AssetDetailPage() {
   const [newCharacterName, setNewCharacterName] = useState('')
   const [form, setForm] = useState({ originalFilename: '', author: '', description: '' })
   const [saving, setSaving] = useState(false)
+  const [source, setSource] = useState<AssetWebSource | null>(null)
+  const [sourceLoading, setSourceLoading] = useState(false)
+  const [similar, setSimilar] = useState<SimilarAsset[] | null>(null)
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const [related, setRelated] = useState<SimilarAsset[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setRelated(null)
+    api
+      .get<SimilarAsset[]>(`/api/assets/${assetId}/related?limit=12`)
+      .then((items) => {
+        if (alive) {
+          setRelated(items)
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setRelated([])
+        }
+      })
+    return () => {
+      alive = false
+    }
+  }, [assetId])
+  const [addTarget, setAddTarget] = useState('')
+  const [zoomed, setZoomed] = useState(false)
+
+  const findSimilar = async () => {
+    setSimilarLoading(true)
+    try {
+      setSimilar(await api.get<SimilarAsset[]>(`/api/assets/${assetId}/similar?limit=12`))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '查找相似失败')
+    } finally {
+      setSimilarLoading(false)
+    }
+  }
+
+  const loadSource = useCallback(async () => {
+    try {
+      setSource(await api.get<AssetWebSource | null>(`/api/assets/${assetId}/source`))
+    } catch {
+      setSource(null)
+    }
+  }, [assetId])
+
+  const lookupSource = async () => {
+    setSourceLoading(true)
+    try {
+      setSource(await api.post<AssetWebSource>(`/api/assets/${assetId}/source-lookup`))
+      toast.success('来源反查完成')
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '来源反查失败')
+    } finally {
+      setSourceLoading(false)
+    }
+  }
 
   const loadAnalysis = useCallback(async () => {
     try {
@@ -84,7 +162,8 @@ export function AssetDetailPage() {
   useEffect(() => {
     void loadCharacters()
     void loadFolders()
-  }, [loadCharacters, loadFolders])
+    void loadSource()
+  }, [loadCharacters, loadFolders, loadSource])
 
   useEffect(() => {
     if (!polling) {
@@ -178,9 +257,10 @@ export function AssetDetailPage() {
     if (!selectedCharacter) {
       return
     }
+    const calibrating = detail?.characterId != null
     try {
       await api.put(`/api/characters/assets/${assetId}`, { characterId: Number(selectedCharacter) })
-      toast.success('已标记角色，并加入该角色的参考向量')
+      toast.success(calibrating ? '已校准为所选角色，原角色参考已移除' : '已标记角色，并加入该角色的参考向量')
       invalidateAssetDetail(assetId)
       await Promise.all([load(), loadCharacters()])
     } catch (err) {
@@ -192,10 +272,11 @@ export function AssetDetailPage() {
     if (!newCharacterName.trim()) {
       return
     }
+    const calibrating = detail?.characterId != null
     try {
       await api.post('/api/characters', { name: newCharacterName.trim(), referenceAssetId: assetId })
       setNewCharacterName('')
-      toast.success('已创建角色并标记')
+      toast.success(calibrating ? '已创建新角色并完成校准' : '已创建角色并标记')
       invalidateAssetDetail(assetId)
       await Promise.all([load(), loadCharacters()])
     } catch (err) {
@@ -214,16 +295,33 @@ export function AssetDetailPage() {
     }
   }
 
-  const moveToFolder = async (folderId: number | null) => {
+  const addToFolder = async () => {
+    if (!addTarget) {
+      return
+    }
     try {
-      await api.put(`/api/folders/assets/${assetId}`, { folderId })
-      toast.success(folderId ? '已移动到文件夹' : '已移至未分类')
+      await api.post('/api/folders/assets/add', { assetIds: [assetId], folderId: Number(addTarget) })
+      toast.success('已添加文件夹')
+      setAddTarget('')
       invalidateAssetDetail(assetId)
       await Promise.all([load(), loadFolders()])
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '移动失败')
+      toast.error(err instanceof Error ? err.message : '添加失败')
     }
   }
+
+  const removeFromFolder = async (folderId: number) => {
+    try {
+      await api.post('/api/folders/assets/remove', { assetIds: [assetId], folderId })
+      toast.success('已移出文件夹')
+      invalidateAssetDetail(assetId)
+      await Promise.all([load(), loadFolders()])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '移出失败')
+    }
+  }
+
+  const folderName = (id: number) => folders.find((folder) => folder.id === id)?.name ?? `#${id}`
 
   const classifyAsset = async () => {
     try {
@@ -235,6 +333,19 @@ export function AssetDetailPage() {
       toast.error(err instanceof Error ? err.message : '自动分类失败')
     }
   }
+
+  useEffect(() => {
+    if (!zoomed) {
+      return
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setZoomed(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [zoomed])
 
   if (!detail) {
     return <div className="py-20 text-center text-stone-500">加载中…</div>
@@ -259,11 +370,48 @@ export function AssetDetailPage() {
     ],
   ]
 
+  const from = (location.state as { from?: string } | null)?.from
+  const backLabel = from === 'search' ? '返回搜索' : '返回图库'
+  const goBack = () => {
+    if (from === 'search') {
+      navigate('/agent')
+      return
+    }
+    if (from === 'gallery') {
+      navigate('/')
+      return
+    }
+    const historyState = window.history.state as { idx?: number } | null
+    if (historyState && typeof historyState.idx === 'number' && historyState.idx > 0) {
+      navigate(-1)
+      return
+    }
+    navigate('/')
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div>
+      <button
+        type="button"
+        onClick={goBack}
+        className="btn-secondary btn-sm mb-4 inline-flex items-center gap-1.5"
+        title={backLabel}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" />
+        </svg>
+        {backLabel}
+      </button>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <div>
         <div className="card overflow-hidden">
-          <img src={detail.url} alt={detail.originalFilename} className="max-h-[70vh] w-full object-contain" />
+          <img
+            src={detail.url}
+            alt={detail.originalFilename}
+            onClick={() => setZoomed(true)}
+            title="点击放大，再次点击或按 Esc 关闭"
+            className="max-h-[70vh] w-full cursor-zoom-in object-contain"
+          />
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button type="button" onClick={download} className="btn-primary">
@@ -271,6 +419,9 @@ export function AssetDetailPage() {
           </button>
           <button type="button" onClick={() => void copyLink()} className="btn-secondary">
             复制外链
+          </button>
+          <button type="button" onClick={() => void findSimilar()} disabled={similarLoading} className="btn-secondary">
+            {similarLoading ? '查找中…' : '找相似'}
           </button>
           <button type="button" onClick={() => void remove()} className="btn-danger">
             删除
@@ -306,9 +457,166 @@ export function AssetDetailPage() {
                   ))}
                 </div>
               )}
+              {analysis.perception && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-stone-400">
+                    感性特征（特征聚合）
+                    {analysis.perception.wallpaperScore > 0 && (
+                      <span className="ml-2 text-teal-700">
+                        壁纸适配度 {Math.round(analysis.perception.wallpaperScore * 100)}%
+                      </span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {perceptionFacetLabels.flatMap(([key, label]) =>
+                      (analysis.perception?.[key] ?? []).map((value) => (
+                        <span
+                          key={`${key}-${value}`}
+                          className="chip border-teal-200 bg-teal-50/80 text-teal-800"
+                        >
+                          {label}·{value}
+                        </span>
+                      )),
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <p className="mt-3 text-stone-400">暂无分析（未启用 AI 或尚未分析）</p>
+          )}
+        </div>
+
+        {related && related.length > 0 && (
+          <div className="card mt-6 p-5 text-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium text-stone-800">相关图片</h2>
+              <span className="text-[11px] text-stone-400">图谱邻居 · 双向稳定关系</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {related.map((item) => (
+                <Link
+                  key={item.assetId}
+                  to={`/assets/${item.assetId}`}
+                  className="group overflow-hidden rounded-xl border border-stone-200/70 transition hover:border-stone-300"
+                >
+                  <AssetThumb
+                    assetId={item.assetId}
+                    alt={item.originalFilename}
+                    className="aspect-[4/3] w-full bg-stone-100 object-cover transition duration-300 group-hover:scale-[1.03]"
+                  />
+                  <div className="flex items-center justify-between gap-1.5 px-2 py-1.5 text-[11px] text-stone-500">
+                    <span className="truncate" title={item.originalFilename}>
+                      {item.originalFilename}
+                    </span>
+                    <span className="chip shrink-0">{Math.round(item.similarity * 100)}%</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="card mt-6 p-5 text-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-medium text-stone-800">
+              相似图片
+              {similarLoading && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-200 border-t-teal-700" />
+              )}
+            </h2>
+            {similar && similar.length > 0 && (
+              <button type="button" onClick={() => void findSimilar()} className="btn-secondary btn-sm">
+                刷新
+              </button>
+            )}
+          </div>
+          {similar === null ? (
+            <p className="mt-3 text-stone-400">点击「找相似」，在本地库中检索相似图片（不联网）。</p>
+          ) : similar.length === 0 ? (
+            <p className="mt-3 text-stone-400">
+              未找到相似图片。若该图没有图像向量，可先点上方「重新分析」生成后再试。
+            </p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {similar.map((item) => (
+                <Link
+                  key={item.assetId}
+                  to={`/assets/${item.assetId}`}
+                  className="group overflow-hidden rounded-xl border border-stone-200/70 transition hover:border-stone-300"
+                >
+                  <AssetThumb
+                    assetId={item.assetId}
+                    alt={item.originalFilename}
+                    className="aspect-[4/3] w-full bg-stone-100 object-cover transition duration-300 group-hover:scale-[1.03]"
+                  />
+                  <div className="flex items-center justify-between gap-1.5 px-2 py-1.5 text-[11px] text-stone-500">
+                    <span className="truncate" title={item.originalFilename}>
+                      {item.originalFilename}
+                    </span>
+                    <span className="chip-accent shrink-0">{Math.round(item.similarity * 100)}%</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card mt-6 p-5 text-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-medium text-stone-800">
+              来源
+              {sourceLoading && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-200 border-t-teal-700" />
+              )}
+            </h2>
+            <button
+              type="button"
+              onClick={() => void lookupSource()}
+              disabled={sourceLoading}
+              className="btn-secondary btn-sm"
+            >
+              {source && (source.status === 'FOUND' || source.status === 'NO_MATCH') ? '重新查找' : '查找来源'}
+            </button>
+          </div>
+          {source && source.status === 'FOUND' ? (
+            <div className="mt-3 space-y-2 text-stone-600">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="chip-accent">{source.sourceType ?? source.provider}</span>
+                {source.similarity != null && (
+                  <span className="chip">相似度 {Math.round(source.similarity * 100)}%</span>
+                )}
+                {source.title && <span className="text-stone-800">{source.title}</span>}
+              </div>
+              {source.author && <p>画师：{source.author}</p>}
+              {source.sourceUrl && (
+                <a
+                  href={source.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block truncate text-teal-700 hover:underline"
+                >
+                  {source.sourceUrl}
+                </a>
+              )}
+              {source.characters.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {source.characters.map((character) => (
+                    <span key={character} className="chip">
+                      {character}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : source && source.status === 'QUOTA' ? (
+            <p className="mt-3 text-amber-700">今日反查配额已用尽，已自动暂停，明天恢复</p>
+          ) : source && source.status === 'FAILED' ? (
+            <p className="mt-3 text-stone-400">反查失败，可重试</p>
+          ) : source && source.status === 'NO_MATCH' ? (
+            <p className="mt-3 text-stone-400">未找到匹配的图片来源</p>
+          ) : (
+            <p className="mt-3 text-stone-400">尚未反查。配置 SauceNAO key 后可自动/手动识别出处、画师与角色。</p>
           )}
         </div>
       </div>
@@ -353,74 +661,113 @@ export function AssetDetailPage() {
               Agent 自动分类
             </button>
           </div>
-          <select
-            value={detail.folderId ?? ''}
-            onChange={(event) => void moveToFolder(event.target.value ? Number(event.target.value) : null)}
-            className="input mt-3"
-          >
-            <option value="">未分类</option>
-            {folders.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.name}
-              </option>
-            ))}
-          </select>
+          {detail.folderIds.length === 0 ? (
+            <p className="mt-3 text-stone-400">未分类（支持多归属，可从下方添加或右键图片操作）</p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {detail.folderIds.map((id) => (
+                <span key={id} className="chip-accent inline-flex items-center gap-1.5 pr-1">
+                  {folderName(id)}
+                  <button
+                    type="button"
+                    title="移出该文件夹"
+                    onClick={() => void removeFromFolder(id)}
+                    className="flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none transition hover:bg-black/20"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex gap-2">
+            <select value={addTarget} onChange={(event) => setAddTarget(event.target.value)} className="input">
+              <option value="">添加到文件夹…</option>
+              {folders
+                .filter((folder) => !detail.folderIds.includes(folder.id))
+                .map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              disabled={!addTarget}
+              onClick={() => void addToFolder()}
+              className="btn-secondary shrink-0"
+            >
+              添加
+            </button>
+          </div>
         </div>
 
         <div className="card p-5 text-sm">
-          <h2 className="font-medium text-stone-800">角色</h2>
-          {detail.characterId ? (
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span className="chip-accent">{characterName}</span>
-              <button type="button" onClick={() => void unmarkCharacter()} className="btn-secondary btn-sm">
-                取消标记
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3 space-y-3">
-              <div className="flex gap-2">
-                <select
-                  value={selectedCharacter}
-                  onChange={(event) => setSelectedCharacter(event.target.value)}
-                  className="input"
-                >
-                  <option value="">选择已有角色</option>
-                  {characters.map((character) => (
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-medium text-stone-800">角色</h2>
+            {detail.characterId ? (
+              <span className="flex items-center gap-2">
+                <span className="chip-accent">{characterName}</span>
+                {detail.characterConfidence != null && detail.characterConfidence < 1 && (
+                  <span className="chip" title="自动识别置信度，识别有误请在下方校准">
+                    识别 {Math.round(detail.characterConfidence * 100)}%
+                  </span>
+                )}
+                <button type="button" onClick={() => void unmarkCharacter()} className="btn-secondary btn-sm">
+                  取消标记
+                </button>
+              </span>
+            ) : (
+              <span className="chip">未标记</span>
+            )}
+          </div>
+          <div className="mt-3 space-y-3">
+            <div className="flex gap-2">
+              <select
+                value={selectedCharacter}
+                onChange={(event) => setSelectedCharacter(event.target.value)}
+                className="input"
+              >
+                <option value="">选择已有角色</option>
+                {characters
+                  .filter((character) => character.id !== detail.characterId)
+                  .map((character) => (
                     <option key={character.id} value={character.id}>
                       {character.name}
                     </option>
                   ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!selectedCharacter}
-                  onClick={() => void markCharacter()}
-                  className="btn-primary shrink-0"
-                >
-                  标记
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={newCharacterName}
-                  onChange={(event) => setNewCharacterName(event.target.value)}
-                  placeholder="新角色名，如 初音未来"
-                  className="input"
-                />
-                <button
-                  type="button"
-                  disabled={!newCharacterName.trim()}
-                  onClick={() => void createAndMarkCharacter()}
-                  className="btn-secondary shrink-0"
-                >
-                  新建并标记
-                </button>
-              </div>
-              <p className="text-xs text-stone-400">
-                标记会将该图片的 AI 向量加入角色参考库，之后上传相似图片可自动匹配（需已完成 AI 分析）
-              </p>
+              </select>
+              <button
+                type="button"
+                disabled={!selectedCharacter}
+                onClick={() => void markCharacter()}
+                className="btn-primary shrink-0"
+              >
+                {detail.characterId ? '校准为' : '标记'}
+              </button>
             </div>
-          )}
+            <div className="flex gap-2">
+              <input
+                value={newCharacterName}
+                onChange={(event) => setNewCharacterName(event.target.value)}
+                placeholder="新角色名，如 初音未来"
+                className="input"
+              />
+              <button
+                type="button"
+                disabled={!newCharacterName.trim()}
+                onClick={() => void createAndMarkCharacter()}
+                className="btn-secondary shrink-0"
+              >
+                {detail.characterId ? '新建并校准' : '新建并标记'}
+              </button>
+            </div>
+            <p className="text-xs text-stone-400">
+              {detail.characterId
+                ? '校准会把该图从原角色的参考库移除，并加入新角色的参考库（需已完成 AI 分析）'
+                : '标记会将该图片的 AI 向量加入角色参考库，之后上传相似图片可自动匹配（需已完成 AI 分析）'}
+            </p>
+          </div>
         </div>
 
         <div className="card p-5 text-sm">
@@ -487,6 +834,21 @@ export function AssetDetailPage() {
             )}
           </div>
         )}
+      </div>
+
+      {zoomed && (
+        <div
+          className="animate-fade-in fixed inset-0 z-[85] flex cursor-zoom-out items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          onClick={() => setZoomed(false)}
+          title="点击关闭"
+        >
+          <img
+            src={detail.url}
+            alt={detail.originalFilename}
+            className="max-h-full max-w-full object-contain"
+          />
+        </div>
+      )}
       </div>
     </div>
   )

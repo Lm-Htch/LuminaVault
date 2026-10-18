@@ -1,5 +1,8 @@
 package com.lumi.vault.business.asset.service;
 
+import lombok.extern.slf4j.Slf4j;
+
+
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.lang.GeoLocation;
 import com.drew.metadata.Directory;
@@ -12,8 +15,6 @@ import com.drew.metadata.exif.GpsDirectory;
 import com.lumi.vault.business.asset.config.AssetProperties;
 import com.lumi.vault.business.asset.entity.AssetMetadata;
 import net.coobird.thumbnailator.Thumbnails;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
@@ -24,9 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
+@Slf4j
 public class ImageProcessor {
-
-    private static final Logger log = LoggerFactory.getLogger(ImageProcessor.class);
     private static final int MAX_ATTRIBUTES = 200;
 
     private final AssetProperties properties;
@@ -36,7 +36,7 @@ public class ImageProcessor {
     }
 
     public record ProcessedImage(Integer width, Integer height, Path thumbnail,
-                                 String thumbnailContentType, AssetMetadata metadata) {
+                                 String thumbnailContentType, AssetMetadata metadata, String colors) {
     }
 
     public ProcessedImage process(Path source, String contentType) {
@@ -45,11 +45,13 @@ public class ImageProcessor {
         String thumbnailContentType = null;
         Integer width = null;
         Integer height = null;
+        String colors = null;
         try {
             BufferedImage image = ImageIO.read(source.toFile());
             if (image != null) {
                 width = image.getWidth();
                 height = image.getHeight();
+                colors = PaletteExtractor.dominantColorsString(image, 5);
                 int orientation = metadata != null && metadata.orientation() != null ? metadata.orientation() : 1;
                 if (isRotated(orientation)) {
                     int originalWidth = width;
@@ -76,7 +78,7 @@ public class ImageProcessor {
                 thumbnailContentType = null;
             }
         }
-        return new ProcessedImage(width, height, thumbnail, thumbnailContentType, metadata);
+        return new ProcessedImage(width, height, thumbnail, thumbnailContentType, metadata, colors);
     }
 
     private AssetMetadata extractMetadata(Path source) {

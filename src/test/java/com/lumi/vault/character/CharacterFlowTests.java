@@ -1,6 +1,7 @@
 package com.lumi.vault.character;
 
 import com.jayway.jsonpath.JsonPath;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.lumi.vault.asset.InMemoryAssetStorage;
 import com.lumi.vault.business.agent.entity.AssetEmbedding;
 import com.lumi.vault.business.agent.cache.AssetEmbeddingCache;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -343,6 +345,51 @@ class CharacterFlowTests {
                 .andExpect(jsonPath("$.data").value(2));
         assertThat(assetMapper.selectById(a1).getCharacterId()).isEqualTo(characterId);
         assertThat(assetMapper.selectById(a2).getCharacterId()).isEqualTo(characterId);
+    }
+
+    @Test
+    void calibrationRemovesWrongCharacterReference() throws Exception {
+        String token = register();
+        long wrongCharacter = createCharacter(token, "误识别角色");
+        long rightCharacter = createCharacter(token, "正确角色");
+        long assetId = upload(token, "calibrate.png", pngBytes(62, 30));
+        insertEmbedding(assetId, "角色图片", "角色图片描述");
+
+        mockMvc.perform(put("/api/characters/assets/" + assetId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterId\":" + wrongCharacter + "}"))
+                .andExpect(status().isOk());
+        assertThat(referenceMapper.selectList(Wrappers.<CharacterReference>lambdaQuery()
+                .eq(CharacterReference::getAssetId, assetId))).hasSize(1);
+
+        mockMvc.perform(put("/api/characters/assets/" + assetId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterId\":" + rightCharacter + "}"))
+                .andExpect(status().isOk());
+        assertThat(assetMapper.selectById(assetId).getCharacterId()).isEqualTo(rightCharacter);
+        var references = referenceMapper.selectList(Wrappers.<CharacterReference>lambdaQuery()
+                .eq(CharacterReference::getAssetId, assetId));
+        assertThat(references).hasSize(1);
+        assertThat(references.get(0).getCharacterId()).isEqualTo(rightCharacter);
+
+        mockMvc.perform(delete("/api/characters/assets/" + assetId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk());
+        assertThat(assetMapper.selectById(assetId).getCharacterId()).isNull();
+        assertThat(referenceMapper.selectList(Wrappers.<CharacterReference>lambdaQuery()
+                .eq(CharacterReference::getAssetId, assetId))).isEmpty();
+    }
+
+    private long createCharacter(String token, String name) throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/characters")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + name + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return readLong(created, "$.data.id");
     }
 
     private String register() throws Exception {

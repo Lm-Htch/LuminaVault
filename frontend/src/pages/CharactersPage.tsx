@@ -99,7 +99,7 @@ export function CharactersPage() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+    <div className="grid gap-6 lg:h-full lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
       <form onSubmit={create} className="card h-fit p-5">
         <h2 className="font-medium text-stone-800">新建角色</h2>
         <label className="mt-4 block">
@@ -147,8 +147,8 @@ export function CharactersPage() {
         </p>
       </form>
 
-      <div>
-        <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="flex min-h-0 flex-col lg:h-full">
+        <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
           <p className="text-sm text-stone-500">
             自动创建角色时，模型标签会转换为角色名并标记为「自动」，可随时改名或删除
           </p>
@@ -172,47 +172,53 @@ export function CharactersPage() {
             </button>
           </div>
         </div>
-        <div className="card overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-400">
-              <tr>
-                <th className="px-5 py-3 font-medium">角色</th>
-                <th className="px-5 py-3 font-medium">别名</th>
-                <th className="px-5 py-3 font-medium">作品</th>
-                <th className="px-5 py-3 font-medium">参考</th>
-                <th className="px-5 py-3 font-medium">创建时间</th>
-                <th className="px-5 py-3 text-right font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {characters.map((character) => (
-                <tr key={character.id} className="transition hover:bg-stone-50/70">
-                  <td className="px-5 py-3.5 font-medium text-stone-800">
-                    {character.name}
-                    {character.autoCreated && <span className="chip ml-2">自动</span>}
-                  </td>
-                  <td className="px-5 py-3.5 text-stone-500">
-                    {character.aliases.length > 0 ? character.aliases.join(' / ') : '-'}
-                  </td>
-                  <td className="px-5 py-3.5 text-stone-500">{character.series || '-'}</td>
-                  <td className="px-5 py-3.5 text-stone-500">{character.referenceCount}</td>
-                  <td className="px-5 py-3.5 text-stone-500">{formatDate(character.createdAt)}</td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button type="button" onClick={() => void remove(character)} className="btn-danger btn-sm">
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {characters.length === 0 && (
+        <div className="card min-h-0 overflow-hidden lg:flex lg:flex-1">
+          <div className="w-full lg:overflow-auto">
+            <table className="w-full text-left text-sm lg:min-w-[780px]">
+              <thead className="sticky top-0 z-10 bg-stone-50 text-xs uppercase tracking-wide text-stone-400">
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center text-stone-400">
-                    还没有角色，先在左侧创建一个
-                  </td>
+                  <th className="whitespace-nowrap px-5 py-3 font-medium">角色</th>
+                  <th className="px-5 py-3 font-medium">别名</th>
+                  <th className="whitespace-nowrap px-5 py-3 font-medium">作品</th>
+                  <th className="w-16 px-5 py-3 font-medium">参考</th>
+                  <th className="whitespace-nowrap px-5 py-3 font-medium">创建时间</th>
+                  <th className="w-24 px-5 py-3 text-right font-medium">操作</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {characters.map((character) => (
+                  <tr key={character.id} className="transition hover:bg-stone-50/70">
+                    <td className="whitespace-nowrap px-5 py-3.5 font-medium text-stone-800">
+                      {character.name}
+                      {character.autoCreated && <span className="chip ml-2">自动</span>}
+                    </td>
+                    <td className="max-w-[240px] truncate px-5 py-3.5 text-stone-500" title={character.aliases.join(' / ')}>
+                      {character.aliases.length > 0 ? character.aliases.join(' / ') : '-'}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3.5 text-stone-500">{character.series || '-'}</td>
+                    <td className="px-5 py-3.5 text-stone-500">{character.referenceCount}</td>
+                    <td className="whitespace-nowrap px-5 py-3.5 text-stone-500">{formatDate(character.createdAt)}</td>
+                    <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void remove(character)}
+                        className="btn-danger btn-sm whitespace-nowrap"
+                      >
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {characters.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-16 text-center text-stone-400">
+                      还没有角色，先在左侧创建一个
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

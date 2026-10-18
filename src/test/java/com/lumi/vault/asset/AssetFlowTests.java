@@ -279,6 +279,93 @@ class AssetFlowTests {
         assertThat(stored.getMetadata().attributes()).isNotEmpty();
     }
 
+    @Test
+    void listSupportsCustomSorting() throws Exception {
+        long zeta = uploadAsset("sort-zeta.png", noisyPngBytes(70, 30));
+        long alpha = uploadAsset("sort-alpha.png", noisyPngBytes(80, 30));
+        long mid = uploadAsset("sort-mid.png", noisyPngBytes(90, 30));
+
+        mockMvc.perform(get("/api/assets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(alpha))
+                .andExpect(jsonPath("$.data.records[1].id").value(mid))
+                .andExpect(jsonPath("$.data.records[2].id").value(zeta));
+
+        mockMvc.perform(get("/api/assets").param("sort", "name_desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(zeta))
+                .andExpect(jsonPath("$.data.records[1].id").value(mid))
+                .andExpect(jsonPath("$.data.records[2].id").value(alpha));
+
+        mockMvc.perform(get("/api/assets").param("sort", "created_desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(mid))
+                .andExpect(jsonPath("$.data.records[1].id").value(alpha))
+                .andExpect(jsonPath("$.data.records[2].id").value(zeta));
+
+        mockMvc.perform(get("/api/assets").param("sort", "created_asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(zeta))
+                .andExpect(jsonPath("$.data.records[1].id").value(alpha))
+                .andExpect(jsonPath("$.data.records[2].id").value(mid));
+
+        mockMvc.perform(get("/api/assets").param("sort", "size_desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(mid))
+                .andExpect(jsonPath("$.data.records[1].id").value(alpha))
+                .andExpect(jsonPath("$.data.records[2].id").value(zeta));
+
+        mockMvc.perform(get("/api/assets").param("sort", "unknown-value"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(alpha));
+
+        mockMvc.perform(get("/api/assets/search").param("sort", "name_desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(zeta))
+                .andExpect(jsonPath("$.data.records[1].id").value(mid))
+                .andExpect(jsonPath("$.data.records[2].id").value(alpha));
+    }
+
+    @Test
+    void filenameSortIsNaturalNumericOrder() throws Exception {
+        long f109 = uploadAsset("109.jpg", pngBytes(31, 30));
+        long f110 = uploadAsset("110.jpg", pngBytes(32, 30));
+        long f1094 = uploadAsset("1094.jpg", pngBytes(33, 30));
+        long img2 = uploadAsset("img 2.png", pngBytes(34, 30));
+        long img10 = uploadAsset("img 10.png", pngBytes(35, 30));
+
+        mockMvc.perform(get("/api/assets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(f109))
+                .andExpect(jsonPath("$.data.records[1].id").value(f110))
+                .andExpect(jsonPath("$.data.records[2].id").value(f1094))
+                .andExpect(jsonPath("$.data.records[3].id").value(img2))
+                .andExpect(jsonPath("$.data.records[4].id").value(img10));
+
+        mockMvc.perform(get("/api/assets").param("sort", "name_desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(img10))
+                .andExpect(jsonPath("$.data.records[1].id").value(img2))
+                .andExpect(jsonPath("$.data.records[2].id").value(f1094))
+                .andExpect(jsonPath("$.data.records[3].id").value(f110))
+                .andExpect(jsonPath("$.data.records[4].id").value(f109));
+
+        mockMvc.perform(put("/api/assets/" + f110)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"originalFilename":"img 0.png"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/assets"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].id").value(f109))
+                .andExpect(jsonPath("$.data.records[1].id").value(f1094))
+                .andExpect(jsonPath("$.data.records[2].id").value(f110))
+                .andExpect(jsonPath("$.data.records[3].id").value(img2))
+                .andExpect(jsonPath("$.data.records[4].id").value(img10));
+    }
+
     private long uploadAsset(String filename, byte[] bytes) throws Exception {
         MvcResult result = mockMvc.perform(multipart("/api/assets")
                         .file(new MockMultipartFile("file", filename, "image/png", bytes)))
@@ -294,6 +381,19 @@ class AssetFlowTests {
 
     private String readString(MvcResult result, String path) throws Exception {
         return JsonPath.read(result.getResponse().getContentAsString(StandardCharsets.UTF_8), path);
+    }
+
+    private byte[] noisyPngBytes(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        java.util.Random random = new java.util.Random(42);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                image.setRGB(x, y, random.nextInt(0xFFFFFF));
+            }
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", output);
+        return output.toByteArray();
     }
 
     private byte[] pngBytes(int width, int height) throws IOException {

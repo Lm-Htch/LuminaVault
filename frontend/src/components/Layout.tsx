@@ -3,10 +3,14 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { AppearanceDrawer } from '../appearance/AppearanceDrawer'
 import { useAppearance } from '../appearance/AppearanceContext'
 import { useAuth } from '../auth/AuthContext'
+import { ApiKeysDrawer } from './ApiKeysDrawer'
+import { McpGuideDialog } from './McpGuideDialog'
+import { SettingsDrawer } from './SettingsDrawer'
 import { UploadProvider } from './UploadProvider'
 
 const links = [
   { to: '/', label: '图库', end: true },
+  { to: '/folders', label: '文件夹', end: false },
   { to: '/agent', label: '智能搜索', end: false },
   { to: '/characters', label: '角色', end: false },
   { to: '/trash', label: '回收站', end: false },
@@ -36,6 +40,10 @@ export function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [appearanceOpen, setAppearanceOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [apiKeysOpen, setApiKeysOpen] = useState(false)
+  const [mcpOpen, setMcpOpen] = useState(false)
+  const [mcpSecret, setMcpSecret] = useState('')
   const { appearance, update } = useAppearance()
 
   const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -87,6 +95,15 @@ export function Layout() {
             <button type="button" onClick={() => setAppearanceOpen(true)} className="btn-secondary btn-sm">
               外观
             </button>
+            <button type="button" onClick={() => setSettingsOpen(true)} className="btn-secondary btn-sm">
+              设置
+            </button>
+            <button type="button" onClick={() => setApiKeysOpen(true)} className="btn-secondary btn-sm">
+              API 密钥
+            </button>
+            <button type="button" onClick={() => setMcpOpen(true)} className="btn-secondary btn-sm">
+              MCP 接入
+            </button>
             <button
               type="button"
               onClick={async () => {
@@ -101,11 +118,30 @@ export function Layout() {
         </div>
       </header>
       <main className="main-scroll min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-screen-2xl px-6 py-8">
+        <div className="mx-auto h-full max-w-screen-2xl px-6 py-8">
           <Outlet />
         </div>
       </main>
       <AppearanceDrawer open={appearanceOpen} onClose={() => setAppearanceOpen(false)} />
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ApiKeysDrawer
+        open={apiKeysOpen}
+        onClose={() => setApiKeysOpen(false)}
+        onConfigureMcp={(secret) => {
+          setMcpSecret(secret)
+          setApiKeysOpen(false)
+          setMcpOpen(true)
+        }}
+      />
+      <McpGuideDialog
+        open={mcpOpen}
+        secret={mcpSecret}
+        onClose={() => setMcpOpen(false)}
+        onRequestKey={() => {
+          setMcpOpen(false)
+          setApiKeysOpen(true)
+        }}
+      />
       </div>
     </UploadProvider>
   )

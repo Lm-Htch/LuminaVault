@@ -24,8 +24,8 @@ public class AssetEmbeddingCache {
         this.objectMapper = objectMapper;
     }
 
-    public record Snapshot(Long assetId, String description, String tags,
-                           double[] text, String textModel, double[] image, String imageModel) {
+    public record Snapshot(Long assetId, String description, String tags, String ocrText, String perception,
+                           double[] text, String textModel, double[] image, String imageModel, double[] clip) {
     }
 
     public Map<Long, Snapshot> all() {
@@ -69,9 +69,12 @@ public class AssetEmbeddingCache {
                 row.getAssetId(),
                 row.getDescription(),
                 row.getTags(),
+                row.getOcrText(),
+                row.getPerception(),
                 VectorUtils.fromJson(row.getEmbedding(), objectMapper),
                 row.getModel(),
                 VectorUtils.fromJson(row.getImageEmbedding(), objectMapper),
-                row.getImageModel());
+                row.getImageModel(),
+                VectorUtils.fromJson(row.getClipEmbedding(), objectMapper));
     }
 }
