@@ -7,6 +7,7 @@
 ![React](https://img.shields.io/badge/React-19-61dafb.svg)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18%20%2B%20pgvector-336791.svg)
 ![MCP](https://img.shields.io/badge/MCP-stdio%20JSON--RPC-8a63d2.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ![系统架构](docs/images/architecture.png)
 
@@ -451,4 +452,4 @@ npm run build
 
 ## 许可证
 
-本仓库暂未声明开源许可证。如需在他人项目中使用，请先联系作者。
+本项目基于 [MIT License](LICENSE) 发布，可自由使用、修改、分发与商用，保留版权声明与许可声明即可。
