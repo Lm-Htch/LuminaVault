@@ -111,6 +111,9 @@ lumina:
   vector:
     enabled: ${LUMINA_VECTOR_ENABLED:true}
     image-model: ${LUMINA_VECTOR_IMAGE_MODEL:wd14-image}
+    # WD14 标签少于该数量即判为通用域（真人/风景/截图）：标签主源改用多模态模型，
+    # 相似建边只走 CLIP 通道。设 0 关闭判别，全部按动漫域处理。
+    general-domain-tag-threshold: ${LUMINA_VECTOR_GENERAL_TAG_THRESHOLD:4}
 
 mybatis-plus:
   configuration:

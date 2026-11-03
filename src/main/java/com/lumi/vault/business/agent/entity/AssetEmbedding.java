@@ -18,8 +18,21 @@ public class AssetEmbedding {
     public static final String STATUS_FAILED = "FAILED";
     public static final String STATUS_SKIPPED = "SKIPPED";
 
+    /**
+     * 动漫域：WD14（Danbooru 标签体系）适用，标签主源与相似建边都用 WD14 特征。
+     */
+    public static final String DOMAIN_ANIME = "anime";
+
+    /**
+     * 通用域：真人 / 风景 / 截图这类 WD14 不擅长的图。标签主源改用多模态模型，
+     * 相似建边只走 CLIP 通道，避免动漫标签把噪声邻居混进来。
+     */
+    public static final String DOMAIN_GENERAL = "general";
+
     @TableId(type = IdType.INPUT)
     private Long assetId;
+
+    private String domain;
 
     private String description;
 

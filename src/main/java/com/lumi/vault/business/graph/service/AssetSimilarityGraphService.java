@@ -113,8 +113,13 @@ public class AssetSimilarityGraphService {
             edgeMapper.deleteForAsset(assetId);
             return;
         }
+        // 通用域（真人 / 风景 / 截图）不吃 WD14 特征：Danbooru 特征在这种图上的近邻几乎全是噪声，
+        // 只保留 CLIP 通道，且边权直接取 CLIP 相似度，不再被双通道权重稀释。
+        boolean generalDomain = AssetEmbedding.DOMAIN_GENERAL.equals(embedding.getDomain());
         Map<Long, Map<String, Double>> channelScores = new LinkedHashMap<>();
-        collectChannel(channelScores, embedding.getImageEmbedding(), assetId, "wd14", settings);
+        if (!generalDomain) {
+            collectChannel(channelScores, embedding.getImageEmbedding(), assetId, "wd14", settings);
+        }
         collectChannel(channelScores, embedding.getClipEmbedding(), assetId, "clip", settings);
         Set<Long> active = activeAssetIds(channelScores.keySet());
         List<Map.Entry<Long, Double>> merged = new ArrayList<>();
@@ -127,12 +132,14 @@ public class AssetSimilarityGraphService {
             Double wd14 = channels.get("wd14");
             Double clip = channels.get("clip");
             double score;
-            if (wd14 != null && clip != null) {
+            if (generalDomain) {
+                score = clip == null ? 0.0 : clip;
+            } else if (wd14 != null && clip != null) {
                 score = settings.wd14Weight() * wd14 + settings.clipWeight() * clip;
             } else if (wd14 != null) {
                 score = wd14 * settings.singleChannelDiscount();
             } else {
-                score = clip * settings.singleChannelDiscount();
+                score = clip == null ? 0.0 : clip * settings.singleChannelDiscount();
             }
             if (score >= settings.edgeThreshold()) {
                 merged.add(Map.entry(neighborId, score));

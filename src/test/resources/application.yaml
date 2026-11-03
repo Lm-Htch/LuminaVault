@@ -17,3 +17,7 @@ lumina:
     secret: test-secret-test-secret-test-secret-1234
     access-ttl: 5m
     refresh-ttl: 1h
+  vector:
+    # 测试里关掉域判别（0 = 全部按动漫域处理），让既有用例的标签与建边行为保持不变。
+    # 域判别本身在真机按 lumina.vector.general-domain-tag-threshold=4 生效。
+    general-domain-tag-threshold: 0

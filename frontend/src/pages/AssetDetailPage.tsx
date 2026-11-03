@@ -16,6 +16,7 @@ import type {
 import { formatBytes, formatDate } from '../utils/format'
 
 const statusClass: Record<string, string> = {
+  PENDING: 'inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700',
   DONE: 'chip-accent',
   FAILED: 'inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600',
   SKIPPED: 'chip',
@@ -462,7 +463,7 @@ export function AssetDetailPage() {
                   <p className="text-xs text-stone-400">
                     感性特征（特征聚合）
                     {analysis.perception.wallpaperScore > 0 && (
-                      <span className="ml-2 text-teal-700">
+                      <span className="ml-2 font-medium text-amber-700">
                         壁纸适配度 {Math.round(analysis.perception.wallpaperScore * 100)}%
                       </span>
                     )}
@@ -472,7 +473,7 @@ export function AssetDetailPage() {
                       (analysis.perception?.[key] ?? []).map((value) => (
                         <span
                           key={`${key}-${value}`}
-                          className="chip border-teal-200 bg-teal-50/80 text-teal-800"
+                          className="chip border border-stone-200/80 text-amber-700"
                         >
                           {label}·{value}
                         </span>

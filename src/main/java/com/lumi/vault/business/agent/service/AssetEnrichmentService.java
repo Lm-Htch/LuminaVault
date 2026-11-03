@@ -29,6 +29,7 @@ import com.lumi.vault.business.perception.PerceptionProfile;
 import com.lumi.vault.business.vector.mapper.VectorSearchMapper;
 import com.lumi.vault.common.ImageUtils;
 import com.lumi.vault.config.VectorProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -67,6 +68,11 @@ public class AssetEnrichmentService {
     private final FolderService folderService;
     private final AssetSimilarityGraphService similarityGraphService;
     private final PerceptionAggregator perceptionAggregator;
+    /**
+     * 自身代理：enrichPending 需要真正走 @Async 的 enrichAsync 排队，
+     * 类内直接调用会绕过代理退化成同步执行（请求会被几十张图卡死）。
+     */
+    private final ObjectProvider<AssetEnrichmentService> selfProvider;
     private final ExecutorService clipExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "clip-backfill");
         thread.setDaemon(true);
@@ -88,7 +94,8 @@ public class AssetEnrichmentService {
                                   VectorSearchMapper vectorSearchMapper,
                                   FolderService folderService,
                                   AssetSimilarityGraphService similarityGraphService,
-                                  PerceptionAggregator perceptionAggregator) {
+                                  PerceptionAggregator perceptionAggregator,
+                                  ObjectProvider<AssetEnrichmentService> selfProvider) {
         this.aiClient = aiClient;
         this.properties = properties;
         this.assetMapper = assetMapper;
@@ -105,9 +112,10 @@ public class AssetEnrichmentService {
         this.folderService = folderService;
         this.similarityGraphService = similarityGraphService;
         this.perceptionAggregator = perceptionAggregator;
+        this.selfProvider = selfProvider;
     }
 
-    @Async
+    @Async("enrichmentExecutor")
     public void enrichAsync(Long assetId) {
         enrich(assetId);
     }
@@ -132,7 +140,7 @@ public class AssetEnrichmentService {
             if (!force && done.contains(id)) {
                 continue;
             }
-            enrichAsync(id);
+            selfProvider.getObject().enrichAsync(id);
             queued++;
         }
         return queued;
@@ -143,10 +151,16 @@ public class AssetEnrichmentService {
         if (asset == null || Boolean.TRUE.equals(asset.getDeleted())) {
             return;
         }
+        // 先落一条 PENDING 占位：排队与执行期间详情页显示「分析中」，而不是「暂无分析」。
+        // 只在还没有记录时写，重跑时保留旧结果，直到新结果覆盖它。
+        if (embeddingMapper.selectById(assetId) == null) {
+            upsert(assetId, null, null, null, null, null, null, null, null, null, null,
+                    AssetEmbedding.STATUS_PENDING, null);
+        }
         boolean vision = aiClient.available() && aiClient.visionEnabled();
         boolean externalModels = imageModelClient.available();
         if (!vision && !externalModels) {
-            upsert(assetId, null, null, null, null, null, null, null, null, null, AssetEmbedding.STATUS_SKIPPED, "AI 与模型服务均未启用");
+            upsert(assetId, null, null, null, null, null, null, null, null, null, null, AssetEmbedding.STATUS_SKIPPED, "AI 与模型服务均未启用");
             return;
         }
         try {
@@ -179,12 +193,18 @@ public class AssetEnrichmentService {
             boolean modelFailed = false;
             String modelError = null;
             List<String> characterTags = List.of();
+            boolean generalDomain = false;
             if (externalModels) {
                 try {
                     ModelAnalysis modelAnalysis = imageModelClient.analyze(image, analysisContentType);
-                    for (ModelTag tag : modelAnalysis.tags()) {
-                        if (!tagNames.contains(tag.tag())) {
-                            tagNames.add(tag.tag());
+                    // 域判别：WD14 只吐出很少标签，说明这不是动漫图（真人 / 风景 / 截图）。
+                    // 这种图硬套 Danbooru 标签只会带来噪声，改以多模态模型的标签作主干。
+                    generalDomain = isGeneralDomain(modelAnalysis.tags().size());
+                    if (!generalDomain) {
+                        for (ModelTag tag : modelAnalysis.tags()) {
+                            if (!tagNames.contains(tag.tag())) {
+                                tagNames.add(tag.tag());
+                            }
                         }
                     }
                     characterTags = modelAnalysis.characters();
@@ -244,6 +264,7 @@ public class AssetEnrichmentService {
                 finalError = truncate("外部模型服务处理失败: " + modelError);
             }
             upsert(assetId,
+                    generalDomain ? AssetEmbedding.DOMAIN_GENERAL : AssetEmbedding.DOMAIN_ANIME,
                     description,
                     VectorUtils.toJson(tagNames, objectMapper),
                     VectorUtils.toJson(characterTags, objectMapper),
@@ -273,7 +294,7 @@ public class AssetEnrichmentService {
             }
         } catch (Exception e) {
             log.warn("资产 {} AI 分析失败: {}", assetId, e.getMessage());
-            upsert(assetId, null, null, null, null, null, null, null, null, null, AssetEmbedding.STATUS_FAILED, truncate(e.getMessage()));
+            upsert(assetId, null, null, null, null, null, null, null, null, null, null, AssetEmbedding.STATUS_FAILED, truncate(e.getMessage()));
         }
     }
 
@@ -401,13 +422,24 @@ public class AssetEnrichmentService {
                 .set(Asset::getCharacterConfidence, confidence));
     }
 
-    private void upsert(Long assetId, String description, String tags, String characterTags, String ocrText,
-                        String perception, String embeddingJson, String model, String imageEmbeddingJson,
-                        String imageModel, String status, String error) {
+    /**
+     * 域判别：WD14 打出的标签数量过少，说明这图不在 Danbooru 标签体系的覆盖范围内
+     * （真人 / 风景 / 截图）。阈值来自 {@code lumina.vector.general-domain-tag-threshold}，
+     * 设 0 表示关闭判别、全部按动漫域处理。
+     */
+    private boolean isGeneralDomain(int modelTagCount) {
+        int threshold = vectorProperties.generalDomainTagThreshold();
+        return threshold > 0 && modelTagCount < threshold;
+    }
+
+    private void upsert(Long assetId, String domain, String description, String tags, String characterTags,
+                        String ocrText, String perception, String embeddingJson, String model,
+                        String imageEmbeddingJson, String imageModel, String status, String error) {
         AssetEmbedding existing = embeddingMapper.selectById(assetId);
         if (existing == null) {
             AssetEmbedding row = new AssetEmbedding();
             row.setAssetId(assetId);
+            row.setDomain(domain);
             row.setDescription(description);
             row.setTags(tags);
             row.setCharacterTags(characterTags);
@@ -425,6 +457,7 @@ public class AssetEnrichmentService {
         }
         embeddingMapper.update(null, Wrappers.<AssetEmbedding>lambdaUpdate()
                 .eq(AssetEmbedding::getAssetId, assetId)
+                .set(domain != null, AssetEmbedding::getDomain, domain)
                 .set(AssetEmbedding::getDescription, description)
                 .set(AssetEmbedding::getTags, tags)
                 .set(AssetEmbedding::getCharacterTags, characterTags)

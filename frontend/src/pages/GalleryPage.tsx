@@ -155,22 +155,10 @@ const GalleryCard = memo(function GalleryCard({ asset, index, inWindow, onScreen
   )
   const style = { animationDelay: `${delay}ms` }
   const handleAnimationEnd = () => setAnimating(false)
-  if (selectMode) {
-    return (
-      <button
-        ref={ref}
-        type="button"
-        data-card-index={index}
-        onClick={() => onToggle(asset.id)}
-        onContextMenu={(event) => onContextMenu(event, asset)}
-        onAnimationEnd={handleAnimationEnd}
-        className={`${cardClass} text-left`}
-        style={style}
-      >
-        {body}
-      </button>
-    )
-  }
+  // 根元素始终是 <a>：批量模式只拦截点击，不替换节点类型。
+  // 换成 <button> 会让同一位置的 DOM 被 React 替换成新节点，旧的观察目标随之离开文档，
+  // IntersectionObserver 会回报一次 isIntersecting=false，visibility 被批量置为 false，
+  // 所有卡片同时命中 media-card-sunk（opacity:0）——表现为「点批量后图片全部消失」。
   return (
     <Link
       ref={ref}
@@ -179,6 +167,16 @@ const GalleryCard = memo(function GalleryCard({ asset, index, inWindow, onScreen
       data-card-index={index}
       className={cardClass}
       style={style}
+      aria-pressed={selectMode ? selected : undefined}
+      role={selectMode ? 'button' : undefined}
+      onClick={
+        selectMode
+          ? (event) => {
+              event.preventDefault()
+              onToggle(asset.id)
+            }
+          : undefined
+      }
       onContextMenu={(event) => onContextMenu(event, asset)}
       onAnimationEnd={handleAnimationEnd}
     >
@@ -212,6 +210,7 @@ export function GalleryPage() {
   const [contextMenu, setContextMenu] = useState<{ asset: AssetResponse; x: number; y: number } | null>(null)
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null)
   const [classifying, setClassifying] = useState(false)
+  const [backfilling, setBackfilling] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const loadingMoreRef = useRef(false)
@@ -415,7 +414,7 @@ export function GalleryPage() {
         observer.observe(node)
       }
     }
-  }, [items])
+  }, [items, selectMode])
 
   // 下滑超过阈值自动隐藏工具栏，回滑浮入（与智能搜索卡片共用 useScrollHidden）
   const revisionRef = useRef(revision)
@@ -439,6 +438,27 @@ export function GalleryPage() {
     uploadFiles(files, selection.type === 'folder' ? { id: selection.id, name: folderName(selection.id) } : undefined)
     if (fileInput.current) {
       fileInput.current.value = ''
+    }
+  }
+
+  // 批量补分析：把没有完成 AI 分析的资产重新排队。后端逐张异步处理，这里只负责提交与提示。
+  const backfillAnalysis = async () => {
+    const ok = await confirm({
+      title: '补全未分析资产？',
+      message: '会为所有没有完成 AI 分析的资产重新排队。后台逐张处理，每张十几秒到几十秒，期间可以继续浏览。',
+      confirmText: '开始补全',
+    })
+    if (!ok) {
+      return
+    }
+    setBackfilling(true)
+    try {
+      const count = await api.post<number>('/api/agent/enrich/pending')
+      toast.success(count > 0 ? `已排队 ${count} 个资产，完成后重新打开详情页可见` : '没有需要补全的资产')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '补全失败')
+    } finally {
+      setBackfilling(false)
     }
   }
 
@@ -856,6 +876,15 @@ export function GalleryPage() {
               hidden
               onChange={(event) => onPickFiles(event.target.files)}
             />
+            <button
+              type="button"
+              disabled={backfilling}
+              onClick={() => void backfillAnalysis()}
+              className="btn-secondary btn-sm whitespace-nowrap"
+              title="为所有未完成 AI 分析的资产重新排队（后台执行，耗时较长）"
+            >
+              {backfilling ? '排队中…' : '补分析'}
+            </button>
             <button type="button" disabled={uploading} onClick={() => fileInput.current?.click()} className="btn-primary">
               {uploading ? '上传中…' : '上传图片'}
             </button>
